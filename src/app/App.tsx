@@ -23,6 +23,14 @@ interface Student {
   teachers: string[];
 }
 
+interface StaffMember {
+  id: string;
+  name: string;
+  role: 'Professor' | 'Psicólogo' | 'Agente' | 'Coordenador SINAPNE';
+  email: string;
+  siape: string;
+}
+
 interface MeetingEvent {
   id: number;
   studentName: string;
@@ -51,6 +59,16 @@ interface CareLog {
   type: string;
   staff: string;
   text: string;
+}
+
+interface ClassHistory {
+  id: string;
+  course: string;
+  gradeYear: string;   // Ex: "2º Ano" ou "3º Semestre"
+  schoolYear: number;  // Ex: 2026
+  semester: number;    // Ex: 1 ou 2
+  status: 'Ativo' | 'Acompanhamento' | 'Concluído' | 'Evadido' | 'Trancado';
+  teachers: string[];  // Nomes dos professores vinculados neste semestre
 }
 
 // ── Data ───────────────────────────────────────────────────────────────────
@@ -89,6 +107,41 @@ const INITIAL_OCCURRENCES: Occurrence[] = [
   { id: 1, studentName: "Lucas Henrique Moreira", subject: "Programação Orientada a Objetos", title: "Dificuldade em atividade em grupo", description: "Aluno apresentou dificuldade de integração durante atividade colaborativa. Isolou-se do grupo e não concluiu a tarefa.", date: "08/05/2025", author: "Profa. Juliana Castro" },
   { id: 2, studentName: "Isabela Ramos Nunes", subject: "Química Orgânica", title: "Distração recorrente em aula", description: "Aluna demonstrou dificuldade em manter o foco durante a explicação da aula prática, levantando-se repetidas vezes da bancada.", date: "14/05/2025", author: "Prof. Diego Faria" },
 ];
+
+const INITIAL_STAFF: StaffMember[] = [
+  { id: "1", name: "Profa. Camila Rocha", role: "Professor", email: "camila.rocha@instituto.edu.br", siape: "1029384" },
+  { id: "2", name: "Prof. Anderson Lima", role: "Professor", email: "anderson.lima@instituto.edu.br", siape: "2048593" },
+  { id: "3", name: "Profa. Juliana Castro", role: "Professor", email: "juliana.castro@instituto.edu.br", siape: "9384751" },
+  { id: "4", name: "Prof. Carlos Mendes", role: "Professor", email: "carlos.mendes@instituto.edu.br", siape: "5729481" },
+  { id: "9", name: "Coord. Rafael Mendes", role: "Coordenador SINAPNE", email: "rafael.mendes@instituto.edu.br", siape: "8472910" },
+];
+
+const AVAILABLE_TEACHERS = [
+  "Profa. Camila Rocha", "Prof. Anderson Lima", "Profa. Juliana Castro",
+  "Prof. Carlos Mendes", "Profa. Renata Souza", "Coord. Rafael Mendes"
+];
+
+const INITIAL_HISTORY: ClassHistory[] = [
+  {
+    id: "class-2",
+    course: "Técnico em Informática",
+    gradeYear: "2º Ano",
+    schoolYear: 2026,
+    semester: 1,
+    status: "Ativo",
+    teachers: ["Profa. Camila Rocha", "Prof. Anderson Lima"]
+  },
+  {
+    id: "class-1",
+    course: "Técnico em Informática",
+    gradeYear: "1º Ano",
+    schoolYear: 2025,
+    semester: 2,
+    status: "Concluído",
+    teachers: ["Prof. Carlos Mendes", "Profa. Renata Souza"]
+  }
+];
+
 
 // ── Utility components ─────────────────────────────────────────────────────
 const Badge = ({ text, color }: { text: string; color: string }) => {
@@ -133,6 +186,7 @@ const KpiCard = ({ icon: Icon, label, value, sub, color }: { icon: React.Element
 const NAV_ITEMS = [
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
   { id: "students", label: "Alunos", icon: Users },
+  { id: "servers", label: "Corpo Docente", icon: Users },
   { id: "log", label: "Atendimentos", icon: Activity },
   { id: "meetings", label: "Reuniões", icon: CalendarDays },
   { id: "occurrences", label: "Ocorrências", icon: AlertTriangle },
@@ -569,6 +623,300 @@ function StudentsScreen({ onSelectStudent }: { onSelectStudent: (id: string) => 
 }
 
 
+function CorpoDocenteView() {
+  const [staffList, setStaffList] = useState<StaffMember[]>(INITIAL_STAFF);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<string>('Todos');
+  
+  // Estado para controlar a navegação interna do perfil
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+
+  // Estados para o formulário de cadastro
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState<StaffMember['role']>('Professor');
+  const [newEmail, setNewEmail] = useState('');
+  const [newSiape, setNewSiape] = useState('');
+
+  const handleAddStaff = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim() || !newEmail.trim() || !newSiape.trim()) return;
+
+    const newMember: StaffMember = {
+      id: String(staffList.length + 1),
+      name: newName,
+      role: newRole,
+      email: newEmail,
+      siape: newSiape,
+      // Mock de alunos associados para novos cadastros
+      students: [] 
+    };
+
+    setStaffList([...staffList, newMember]);
+    setNewName('');
+    setNewEmail('');
+    setNewSiape('');
+    setNewRole('Professor');
+    setIsModalOpen(false);
+  };
+
+  const filteredStaff = selectedFilter === 'Todos' 
+    ? staffList 
+    : staffList.filter(member => member.role === selectedFilter);
+
+  // Encontra os dados do membro selecionado para a tela de Perfil
+  const currentStaff = staffList.find(m => m.id === selectedStaffId);
+
+  // --- TELA DE PERFIL DO PROFESSOR / MEMBRO DA EQUIPE ---
+  if (currentStaff) {
+    return (
+      <div className="p-6 space-y-6 animate-fade-in">
+        {/* Botão de Voltar e Nome */}
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setSelectedStaffId(null)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-600"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600">{currentStaff.role}</span>
+            <h2 className="text-2xl font-bold text-gray-800">{currentStaff.name}</h2>
+          </div>
+        </div>
+
+        {/* Informações Gerais em Barra Horizontal Completa */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-gray-200/80 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><Mail size={18} /></div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-gray-400 uppercase">E-mail Institucional</p>
+              <p className="text-sm text-gray-700 truncate">{currentStaff.email}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><IdentificationCard size={18} /></div>
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase">Matrícula SIAPE</p>
+              <p className="text-sm text-gray-700 font-mono">{currentStaff.siape}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><GraduationCap size={18} /></div>
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase">Alunos Vinculados</p>
+              <p className="text-sm text-gray-700 font-bold">{currentStaff.students?.length || 0} alunos neste período</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabela de Alunos sob a Responsabilidade/Acompanhamento */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-xs">
+          <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+            <h3 className="font-bold text-gray-800 text-sm">Alunos Atendidos / Enturmados neste Semestre</h3>
+          </div>
+          
+          {currentStaff.students && currentStaff.students.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase bg-gray-50/20">
+                    <th className="py-3 px-4">Nome do Aluno</th>
+                    <th className="py-3 px-4">Matrícula</th>
+                    <th className="py-3 px-4">Curso / Ano</th>
+                    <th className="py-3 px-4">Condição/Necessidade</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-sm">
+                  {currentStaff.students.map((student) => (
+                    <tr key={student.id} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="py-3 px-4 font-semibold text-gray-700">{student.name}</td>
+                      <td className="py-3 px-4 text-gray-500 font-mono text-xs">#{student.registration}</td>
+                      <td className="py-3 px-4 text-gray-600">{student.course} — {student.year}</td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+                          {student.need}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-sm text-gray-400">
+              Nenhum aluno vinculado a este profissional no período selecionado.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // --- TELA DE LISTAGEM PRINCIPAL (OCUPA A TELA TODA) ---
+  return (
+    <div className="p-6 space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">Equipe e Corpo Docente</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Gerencie os acessos, cargos e visualize as turmas de cada profissional.</p>
+        </div>
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition shadow-sm"
+        >
+          + Adicionar Membro
+        </button>
+      </div>
+
+      {/* Filtro por Tipo de Usuário */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {['Todos', 'Professor', 'Psicólogo', 'Agente', 'Coordenador SINAPNE'].map((filter) => (
+          <button
+            key={filter}
+            onClick={() => setSelectedFilter(filter)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
+              selectedFilter === filter 
+                ? 'bg-blue-100 text-blue-700' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {filter}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista em Formato de Tabela Ocupando Tela Inteira */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <th className="py-3.5 px-6">Nome Completo</th>
+                <th className="py-3.5 px-6">Cargo / Função</th>
+                <th className="py-3.5 px-6">SIAPE</th>
+                <th className="py-3.5 px-6">E-mail Institucional</th>
+                <th className="py-3.5 px-6 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-sm">
+              {filteredStaff.map((member) => (
+                <tr key={member.id} className="hover:bg-blue-50/20 transition-colors group">
+                  <td className="py-4 px-6 font-semibold text-gray-800">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 uppercase">
+                        {member.name.split(" ").map(n => n[0]).slice(0,2).join("")}
+                      </div>
+                      <span>{member.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      member.role === 'Coordenador SINAPNE' ? 'bg-purple-100 text-purple-700' :
+                      member.role === 'Psicólogo' ? 'bg-teal-100 text-teal-700' :
+                      member.role === 'Agente' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {member.role}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6 font-mono text-xs text-gray-600">{member.siape}</td>
+                  <td className="py-4 px-6 text-gray-500">{member.email}</td>
+                  <td className="py-4 px-6 text-center">
+                    <button
+                      onClick={() => setSelectedStaffId(member.id)}
+                      className="px-3 py-1.5 bg-gray-50 hover:bg-blue-600 hover:text-white border border-gray-200 text-gray-600 rounded-md text-xs font-semibold transition"
+                    >
+                      Ver Alunos
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal / Formulário de Cadastro */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Cadastrar Novo Integrante</h3>
+            <form onSubmit={handleAddStaff} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+                <input 
+                  type="text" 
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Ex: Profa. Maria Silva"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">SIAPE</label>
+                  <input 
+                    type="text" 
+                    value={newSiape}
+                    onChange={(e) => setNewSiape(e.target.value)}
+                    placeholder="Ex: 1234567"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Usuário</label>
+                  <select 
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value as StaffMember['role'])}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Professor">Professor(a)</option>
+                    <option value="Psicólogo">Psicólogo(a)</option>
+                    <option value="Agente">Agente</option>
+                    <option value="Coordenador SINAPNE">Coordenador(a) SINAPNE</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail Institucional</label>
+                <input 
+                  type="email" 
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="nome.sobrenome@instituto.edu.br"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                >
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ── SCREEN: Care Log & Management (Atendimentos Screen) ──────────────────────
 function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAddLogClick: () => void }) {
   const [search, setSearch] = useState("");
@@ -653,8 +1001,25 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
   onScheduleMeeting: (student: Student) => void;
   onCreateOccurrence: (student: Student) => void;
 }) {
-  const [tab, setTab] = useState<"timeline" | "pei" | "requests">("timeline");
+  // 1. Atualizado o Estado da Tab para incluir "classes"
+  const [tab, setTab] = useState<"timeline" | "pei" | "requests" | "classes">("timeline");
   const student = STUDENTS.find(s => s.id === studentId) ?? STUDENTS[0];
+
+  // 2. Estados adicionados para gerenciar o histórico de turmas e modal local
+  const [isClassModalOpen, setIsClassModalOpen] = useState(false);
+  const [classHistory, setClassHistory] = useState([
+    { id: "c1", course: "Técnico em Informática", gradeYear: "2º Ano", schoolYear: 2026, semester: 1, status: "Ativo", teachers: ["Profa. Camila Rocha", "Prof. Anderson Lima", "Profa. Juliana Castro"] },
+    { id: "c2", course: "Técnico em Informática", gradeYear: "1º Ano", schoolYear: 2025, semester: 2, status: "Concluído", teachers: ["Prof. Carlos Mendes", "Profa. Renata Souza"] }
+  ]);
+  
+  // Estados do formulário de nova turma
+  const [newGradeYear, setNewGradeYear] = useState('');
+  const [newSchoolYear, setNewSchoolYear] = useState(new Date().getFullYear());
+  const [newSemester, setNewSemester] = useState(1);
+  const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+
+  // Lista de docentes disponíveis para o checkbox do modal (Baseado no seu corpo docente)
+  const AVAILABLE_TEACHERS = ["Profa. Camila Rocha", "Prof. Anderson Lima", "Profa. Juliana Castro", "Prof. Carlos Mendes", "Profa. Renata Souza", "Prof. Diego Faria"];
 
   const typeStyle = (type: string) => {
     if (type.includes("Ocorrência")) return { icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50" };
@@ -663,8 +1028,32 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
     return { icon: Activity, color: "text-indigo-500", bg: "bg-indigo-50" };
   };
 
+  const handleCreateClass = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGradeYear.trim() || selectedTeachers.length === 0) return;
+
+    // Conclui a turma ativa anterior automaticamente
+    const archivedHistory = classHistory.map(c => c.status === 'Ativo' ? { ...c, status: 'Concluído' } : c);
+
+    const newClass = {
+      id: String(Date.now()),
+      course: student.course, // Herda o curso atual do aluno
+      gradeYear: newGradeYear,
+      schoolYear: newSchoolYear,
+      semester: newSemester,
+      status: "Ativo",
+      teachers: selectedTeachers
+    };
+
+    setClassHistory([newClass, ...archivedHistory]);
+    setNewGradeYear('');
+    setSelectedTeachers([]);
+    setIsClassModalOpen(false);
+  };
+
   return (
     <div className="p-6 space-y-5">
+      {/* Card superior de dados do Aluno */}
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="h-2" style={{ background: student.alert ? "var(--destructive)" : "var(--accent)" }} />
         <div className="p-5">
@@ -722,14 +1111,21 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
         </div>
       </div>
 
+      {/* Container de Abas */}
       <div className="bg-card rounded-lg border border-border overflow-hidden">
-        <div className="border-b border-border flex">
-          {[{ key: "timeline", label: "Histórico / Linha do Tempo" }, { key: "pei", label: "Planos de Ensino (PEI)" }, { key: "requests", label: "Solicitações" }].map(t => (
+        <div className="border-b border-border flex flex-wrap">
+          {[
+            { key: "timeline", label: "Histórico / Linha do Tempo" }, 
+            { key: "pei", label: "Planos de Ensino (PEI)" }, 
+            { key: "requests", label: "Solicitações" },
+            { key: "classes", label: "Turmas / Semestres" } // <-- Inserido o item na navegação
+          ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-5 py-3.5 text-sm font-medium transition-all border-b-2 -mb-px ${tab === t.key ? "border-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`} style={tab === t.key ? { borderBottomColor: "var(--accent)" } : {}}>
               {t.label}
             </button>
           ))}
         </div>
+        
         <div className="p-5">
           {tab === "timeline" && (
             <div className="relative">
@@ -753,6 +1149,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
               </ul>
             </div>
           )}
+          
           {tab === "pei" && (
             <div className="space-y-3">
               {[{ title: "PEI 2025/1 — Vigente", date: "10/02/2025", author: "Coord. Rafael Mendes", status: "Ativo" as const }, { title: "PEI 2024/2 — Encerrado", date: "05/08/2024", author: "Coord. Rafael Mendes", status: "Inativo" as const }].map((p, i) => (
@@ -768,6 +1165,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
               <button className="flex items-center gap-2 text-sm font-medium mt-2 px-4 py-2 rounded-lg border border-dashed border-border text-muted-foreground hover:bg-secondary transition-colors w-full justify-center"><Plus size={14} /> Carregar Novo PEI</button>
             </div>
           )}
+          
           {tab === "requests" && (
             <div className="space-y-3">
               {[
@@ -786,8 +1184,140 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
               ))}
             </div>
           )}
+
+          {/* 3. Renderização da nova Aba de Turmas / Semestres */}
+          {tab === "classes" && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center mb-2">
+                <div>
+                  <h4 className="text-sm font-bold text-foreground">Histórico de Enturmação Semestral</h4>
+                  <p className="text-xs text-muted-foreground">Acompanhe as turmas pelas quais o aluno passou.</p>
+                </div>
+                <button 
+                  onClick={() => setIsClassModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition shadow-xs"
+                >
+                  <Plus size={12} /> Criar Turma
+                </button>
+              </div>
+
+              {/* Lista das Turmas */}
+              <div className="space-y-3">
+                {classHistory.map((item) => {
+                  const isActive = item.status === "Ativo";
+                  return (
+                    <div key={item.id} className={`p-4 rounded-lg border ${isActive ? 'bg-blue-50/30 border-blue-200/80' : 'bg-transparent border-border'} flex flex-col gap-2`}>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className={`inline-block text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mr-2 ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-secondary text-muted-foreground'}`}>
+                            {item.schoolYear}.{item.semester}
+                          </span>
+                          <span className="text-sm font-bold text-foreground">{item.course} — {item.gradeYear}</span>
+                        </div>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
+                          {item.status}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t border-dashed border-border/60 flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs text-muted-foreground font-medium mr-1">Professores:</span>
+                        {item.teachers.map((teacher, idx) => (
+                          <span key={idx} className="text-xs bg-card border border-border px-2 py-0.5 rounded text-foreground font-medium shadow-2xs">
+                            {teacher}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* 4. Modal para o cadastro/vínculo da nova turma */}
+      {isClassModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-card border border-border rounded-xl p-5 max-w-md w-full shadow-xl">
+            <h3 className="text-base font-bold text-foreground mb-1">Enturmar em Novo Semestre</h3>
+            <p className="text-xs text-muted-foreground mb-4">Insira os parâmetros da nova fase e selecione os professores atuais.</p>
+            
+            <form onSubmit={handleCreateClass} className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Fase/Ano</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: 3º Ano" 
+                    value={newGradeYear}
+                    onChange={(e) => setNewGradeYear(e.target.value)}
+                    className="w-full border border-border bg-secondary/20 rounded-md px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Ano Letivo</label>
+                  <input 
+                    type="number" 
+                    value={newSchoolYear}
+                    onChange={(e) => setNewSchoolYear(Number(e.target.value))}
+                    className="w-full border border-border bg-secondary/20 rounded-md px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Semestre</label>
+                  <select 
+                    value={newSemester}
+                    onChange={(e) => setNewSemester(Number(e.target.value))}
+                    className="w-full border border-border bg-secondary/20 rounded-md px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+                  >
+                    <option value={1}>1º Sem.</option>
+                    <option value={2}>2º Sem.</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Professores do Semestre Atual</label>
+                <div className="border border-border bg-secondary/10 rounded-md p-2.5 max-h-36 overflow-y-auto space-y-1.5">
+                  {AVAILABLE_TEACHERS.map((teacher) => {
+                    const checked = selectedTeachers.includes(teacher);
+                    return (
+                      <label key={teacher} className="flex items-center gap-2 text-xs text-foreground cursor-pointer hover:bg-secondary/30 p-1 rounded">
+                        <input 
+                          type="checkbox" 
+                          checked={checked}
+                          onChange={() => setSelectedTeachers(prev => checked ? prev.filter(t => t !== teacher) : [...prev, teacher])}
+                          className="rounded text-blue-600 focus:ring-0 w-3.5 h-3.5"
+                        />
+                        <span>{teacher}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <button 
+                  type="button" 
+                  onClick={() => setIsClassModalOpen(false)} 
+                  className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary rounded-md"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={selectedTeachers.length === 0}
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                >
+                  Confirmar Matrícula
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1527,6 +2057,7 @@ export default function App() {
               onAddLogClick={() => setIsLogModalOpen(true)} 
             />
           )}
+          {activeNav === "servers" && <CorpoDocenteView />}
           {activeNav === "meetings" && (
             <MeetingsScreen
               meetings={meetings}
