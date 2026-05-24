@@ -5,10 +5,11 @@ import {
   Clock, Upload, CheckCircle, AlertCircle, X, ChevronRight,
   Eye, Download, User, LogOut, BookOpen, Home,
   Phone, Mail, Shield, Star, Activity, ChevronLeft,
+  ArrowLeft, IdCard, GraduationCap,
 } from "lucide-react";
 
-// ── Types ──────────────────────────────────────────────────────────────────
-type Screen = "overview" | "students" | "record" | "log" | "meetings" | "occurrences" | "profile";
+
+type Screen = "overview" | "students" | "servers" | "record" | "log" | "meetings" | "occurrences" | "profile";
 
 interface Student {
   id: string;
@@ -29,6 +30,7 @@ interface StaffMember {
   role: 'Professor' | 'Psicólogo' | 'Agente' | 'Coordenador SINAPNE';
   email: string;
   siape: string;
+  students?: Student[];
 }
 
 interface MeetingEvent {
@@ -169,8 +171,28 @@ const StatusBadge = ({ status }: { status: Student["status"] }) => {
   );
 };
 
-const KpiCard = ({ icon: Icon, label, value, sub, color }: { icon: React.ElementType; label: string; value: string | number; sub: string; color: string }) => (
-  <div className="bg-card rounded-lg border border-border p-5 flex items-start gap-4 hover:shadow-md transition-shadow">
+const KpiCard = ({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color,
+  onClick,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  sub: string;
+  color: string;
+  onClick?: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`bg-card rounded-lg border border-border p-5 flex items-start gap-4 hover:shadow-md transition-shadow text-left w-full ${
+      onClick ? "cursor-pointer" : "cursor-default"
+    }`}
+  >
     <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
       <Icon size={20} className="text-white" />
     </div>
@@ -179,7 +201,7 @@ const KpiCard = ({ icon: Icon, label, value, sub, color }: { icon: React.Element
       <p className="text-2xl font-bold text-foreground mt-0.5" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{value}</p>
       <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
     </div>
-  </div>
+  </button>
 );
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
@@ -192,12 +214,23 @@ const NAV_ITEMS = [
   { id: "occurrences", label: "Ocorrências", icon: AlertTriangle },
 ];
 
-function Sidebar({ current, onNav }: { current: string; onNav: (s: Screen) => void }) {
+function Sidebar({
+  current,
+  onNav,
+  onLogout,
+}: {
+  current: string;
+  onNav: (s: Screen) => void;
+  onLogout: () => void;
+}) {
   return (
     <aside className="w-60 flex-shrink-0 flex flex-col h-screen sticky top-0" style={{ background: "var(--sidebar)" }}>
       <div className="px-5 py-5 border-b" style={{ borderColor: "var(--sidebar-border)" }}>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: "var(--accent)" }}>
+          <div
+            className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+            style={{ background: "#63AB71" }}
+          >
             <Shield size={16} className="text-white" />
           </div>
           <div>
@@ -236,7 +269,10 @@ function Sidebar({ current, onNav }: { current: string; onNav: (s: Screen) => vo
             <p className="text-white text-xs font-semibold leading-tight truncate">Rafael Mendes</p>
             <p className="text-[10px] leading-tight" style={{ color: "var(--sidebar-foreground)" }}>Coordenador NAPNE</p>
           </div>
-          <button className="opacity-50 hover:opacity-100 transition-opacity">
+          <button
+            onClick={onLogout}
+            className="opacity-50 hover:opacity-100 transition-opacity"
+          >
             <LogOut size={14} style={{ color: "var(--sidebar-foreground)" }} />
           </button>
         </div>
@@ -317,7 +353,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, #0E9A8C 0%, transparent 50%), radial-gradient(circle at 80% 20%, #fff 0%, transparent 40%)" }} />
         <div className="relative">
           <div className="flex items-center gap-3 mb-12">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--accent)" }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "#63AB71" }}>
               <Shield size={20} className="text-white" />
             </div>
             <div>
@@ -335,7 +371,10 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       </div>
 
       {/* Right panel */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-background">
+      <div
+        className="flex-1 flex items-center justify-center p-6"
+        style={{ background: "#E6FFE7" }}
+      >
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2.5 mb-8">
             <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "var(--accent)" }}>
@@ -408,10 +447,24 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={Users} label="Alunos Ativos" value={47} sub="+3 este semestre" color="bg-primary" />
+        <KpiCard
+            icon={Users}
+            label="Alunos Ativos"
+            value={47}
+            sub="+3 este semestre"
+            color="bg-primary"
+            onClick={() => onNav("students")}
+      />
         <KpiCard icon={Clock} label="Atend. Pendentes" value={8} sub="Aguardando registro" color="bg-amber-500" />
         <KpiCard icon={FileText} label="Prorrogações" value={5} sub="Concedidas este mês" color="bg-teal-600" />
-        <KpiCard icon={CalendarDays} label="Reuniões na Semana" value={3} sub="Próxima: 26/05 às 14h" color="bg-indigo-600" />
+        <KpiCard
+          icon={CalendarDays}
+          label="Reuniões na Semana"
+          value={3}
+          sub="Próxima: 26/05 às 14h"
+          color="bg-indigo-600"
+          onClick={() => onNav("meetings")}
+        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
@@ -490,17 +543,57 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
 }
 
 // ── SCREEN: Students ───────────────────────────────────────────────────────
-function StudentsScreen({ onSelectStudent }: { onSelectStudent: (id: string) => void }) {
+function StudentsScreen({
+  students,
+  setStudents,
+  onSelectStudent,
+}: {
+  students: Student[];
+  setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
+  onSelectStudent: (id: string) => void;
+}) {
   const [search, setSearch] = useState("");
   const [filterNeed, setFilterNeed] = useState("Todas");
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState(1);
 
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newRegistration, setNewRegistration] = useState("");
+  const [newCourse, setNewCourse] = useState("Técnico em Informática");
+  const [newYear, setNewYear] = useState("1º Ano");
+  const [newNeed, setNewNeed] = useState("TEA");
+
   const needs = ["Todas", "TEA", "TDAH", "Deficiência Visual", "Deficiência Auditiva", "Altas Habilidades", "Dislexia"];
-  const filtered = STUDENTS.filter(s =>
+  const filtered = students.filter(s =>
     (filterNeed === "Todas" || s.need === filterNeed) &&
     (s.name.toLowerCase().includes(search.toLowerCase()) || s.registration.includes(search))
   );
+
+  const handleSaveStudent = () => {
+    if (!newStudentName.trim() || !newRegistration.trim()) return;
+
+    const newStudent: Student = {
+      id: String(Date.now()),
+      name: newStudentName,
+      registration: newRegistration,
+      need: newNeed,
+      needColor: "green",
+      course: newCourse,
+      year: newYear,
+      status: "Ativo",
+      teachers: [],
+    };
+
+    setStudents(prev => [...prev, newStudent]);
+
+    setNewStudentName("");
+    setNewRegistration("");
+    setNewCourse("Técnico em Informática");
+    setNewYear("1º Ano");
+    setNewNeed("TEA");
+    setShowModal(false);
+    setModalStep(1);
+  };
 
   return (
     <div className="p-6 space-y-5">
@@ -587,8 +680,18 @@ function StudentsScreen({ onSelectStudent }: { onSelectStudent: (id: string) => 
             <div className="px-6 py-5 space-y-4">
               {modalStep === 1 && (
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">Nome Completo *</label><input placeholder="Ex: João Carlos da Silva" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Matrícula *</label><input placeholder="2025001" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">Nome Completo *</label><input
+                          value={newStudentName}
+                          onChange={e => setNewStudentName(e.target.value)}
+                          placeholder="Ex: João Carlos da Silva"
+                          className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Matrícula *</label><input
+  value={newRegistration}
+  onChange={e => setNewRegistration(e.target.value)}
+  placeholder="2025001"
+  className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+ /></div>
                   <div><label className="text-xs font-medium text-foreground block mb-1">CPF</label><input placeholder="000.000.000-00" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                   <div><label className="text-xs font-medium text-foreground block mb-1">Data de Nascimento</label><input type="date" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                   <div><label className="text-xs font-medium text-foreground block mb-1">Contato / WhatsApp</label><input placeholder="(67) 9 9999-9999" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
@@ -613,7 +716,7 @@ function StudentsScreen({ onSelectStudent }: { onSelectStudent: (id: string) => 
             </div>
             <div className="px-6 pb-5 flex items-center justify-between gap-3">
               <button onClick={() => modalStep > 1 ? setModalStep(s => s - 1) : setShowModal(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors">{modalStep > 1 ? "Voltar" : "Cancelar"}</button>
-              <button onClick={() => modalStep < 3 ? setModalStep(s => s + 1) : setShowModal(false)} className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: modalStep === 3 ? "var(--accent)" : "var(--primary)" }}>{modalStep === 3 ? "Salvar Cadastro" : "Próxima Etapa"}</button>
+              <button onClick={() => modalStep < 3 ? setModalStep(s => s + 1) : handleSaveStudent()}className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: modalStep === 3 ? "var(--accent)" : "var(--primary)" }}>{modalStep === 3 ? "Salvar Cadastro" : "Próxima Etapa"}</button>
             </div>
           </div>
         </div>
@@ -623,8 +726,13 @@ function StudentsScreen({ onSelectStudent }: { onSelectStudent: (id: string) => 
 }
 
 
-function CorpoDocenteView() {
-  const [staffList, setStaffList] = useState<StaffMember[]>(INITIAL_STAFF);
+function CorpoDocenteView({
+  staffList,
+  setStaffList,
+}: {
+  staffList: StaffMember[];
+  setStaffList: React.Dispatch<React.SetStateAction<StaffMember[]>>;
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('Todos');
   
@@ -694,7 +802,7 @@ function CorpoDocenteView() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><IdentificationCard size={18} /></div>
+            <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><IdCard size={18} /></div>
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase">Matrícula SIAPE</p>
               <p className="text-sm text-gray-700 font-mono">{currentStaff.siape}</p>
@@ -763,7 +871,8 @@ function CorpoDocenteView() {
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition shadow-sm"
+          className="text-white px-4 py-2 rounded-lg font-medium text-sm transition shadow-sm hover:opacity-90"
+          style={{ background: "var(--primary)" }}
         >
           + Adicionar Membro
         </button>
@@ -1785,7 +1894,13 @@ function ProfileScreen() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="bg-card rounded-lg border border-border overflow-hidden">
-        <div className="h-32 relative" style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }}>
+        <div
+          className="h-32 relative"
+          style={{
+            background:
+              "linear-gradient(90deg,rgba(15, 61, 26, 1) 1%, rgba(31, 110, 42, 1) 50%, rgba(50, 160, 65, 1) 100%)",
+          }}
+        >
           <div className="absolute -bottom-14 left-6">
             <div className="relative">
               {tempPhoto ? (
@@ -1961,6 +2076,15 @@ export default function App() {
   const [meetingPrefilledStudent, setMeetingPrefilledStudent] = useState<Student | null>(null);
   const [occurrencePrefilledStudent, setOccurrencePrefilledStudent] = useState<Student | null>(null);
 
+  const [students, setStudents] = useState<Student[]>(STUDENTS);
+
+  const [staffList, setStaffList] = useState<StaffMember[]>(
+    INITIAL_STAFF.map(member => ({
+      ...member,
+      students: STUDENTS.filter(student => student.teachers.includes(member.name)),
+    }))
+  );
+
   const handleLogin = () => setScreen("app");
 
   const handleNav = (s: Screen) => {
@@ -1999,11 +2123,21 @@ export default function App() {
     setOccurrencePrefilledStudent(null);
   };
 
+  const handleLogout = () => {
+    setScreen("login");
+    setActiveNav("overview");
+    setSelectedStudent(null);
+    setShowLog(false);
+    setMeetingPrefilledStudent(null);
+    setOccurrencePrefilledStudent(null);
+  };
+
   if (screen === "login") return <LoginScreen onLogin={handleLogin} />;
 
   const TITLES: Record<Screen, string> = {
     overview: "Visão Geral",
     students: selectedStudent ? "Prontuário Eletrônico" : "Gestão de Alunos",
+    servers: "Corpo Docente",
     log: "Registrar Atendimento",
     meetings: "Reuniões",
     occurrences: "Ocorrências",
@@ -2014,7 +2148,7 @@ export default function App() {
   return (
     <div className="flex h-screen overflow-hidden bg-background" style={{ fontFamily: "Inter, sans-serif" }}>
       <div className="w-60 flex-shrink-0">
-        <Sidebar current={activeNav} onNav={handleNav} />
+        <Sidebar current={activeNav} onNav={handleNav} onLogout={handleLogout} />
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -2038,7 +2172,11 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto">
           {activeNav === "overview" && <OverviewScreen onNav={handleNav} />}
-          {activeNav === "students" && !selectedStudent && <StudentsScreen onSelectStudent={handleSelectStudent} />}
+          {activeNav === "students" && !selectedStudent && <StudentsScreen
+              students={students}
+              setStudents={setStudents}
+              onSelectStudent={handleSelectStudent}
+            />}
           {activeNav === "students" && selectedStudent && !showLog && (
             <StudentRecord
               studentId={selectedStudent}
@@ -2057,7 +2195,9 @@ export default function App() {
               onAddLogClick={() => setIsLogModalOpen(true)} 
             />
           )}
-          {activeNav === "servers" && <CorpoDocenteView />}
+          {activeNav === "servers" && (
+            <CorpoDocenteView staffList={staffList} setStaffList={setStaffList} />
+          )}
           {activeNav === "meetings" && (
             <MeetingsScreen
               meetings={meetings}
