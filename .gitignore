@@ -30,3 +30,4 @@ vite.svg
 *.db
 *.log
 .vercel/
+.npm/

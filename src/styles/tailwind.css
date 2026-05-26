@@ -1,4 +1,6 @@
-@import 'tailwindcss' source(none);
-@source '../**/*.{js,ts,jsx,tsx}';
+@import "tailwindcss";
+
+/* Configure content sources for Tailwind CSS */
+/* @source "../**\/*.{js,ts,jsx,tsx}"; */
 
 @import 'tw-animate-css';
