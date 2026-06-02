@@ -21,17 +21,12 @@ CREATE TABLE IF NOT EXISTS teachers (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 2. Tabela de Alunos
-CREATE TABLE IF NOT EXISTS students (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(150) NOT NULL,
-    registration VARCHAR(20) NOT NULL UNIQUE,
-    need VARCHAR(100) NOT NULL,
-    need_color VARCHAR(30) NOT NULL,
-    course VARCHAR(150) NOT NULL,
-    year_group VARCHAR(50) NOT NULL, -- 'year' é palavra reservada no MySQL
-    status ENUM('Ativo', 'Acompanhamento', 'Inativo') NOT NULL DEFAULT 'Ativo',
-    alert BOOLEAN DEFAULT FALSE
+-- 2. TABELA: RESPONSÁVEL (Pais ou tutores dos alunos)
+CREATE TABLE Responsavel (
+    id_responsavel SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    contato VARCHAR(20) NOT NULL,
+    email VARCHAR(100)
 );
 
 -- 3. Tabela de Acompanhadoras (muitos para muitos com Alunos)
@@ -92,13 +87,18 @@ CREATE TABLE IF NOT EXISTS meetings (
     FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 6. Tabela de Relacionamento Reunião x Professores Convidados (Muitos para Muitos)
-CREATE TABLE IF NOT EXISTS meeting_teachers (
-    meeting_id INT,
-    teacher_id INT,
-    PRIMARY KEY (meeting_id, teacher_id),
-    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
-    FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+-- 6. TABELA: DOCUMENTAÇÃO (Laudos, PEI, Relatórios)
+CREATE TABLE Documentation (
+    id_documento SERIAL PRIMARY KEY,
+    id_aluno INT NOT NULL,
+    id_usuario INT NOT NULL, -- Quem enviou/criou o documento
+    nome VARCHAR(150) NOT NULL, -- Ex: 'Plano Educacional Individualizado'
+    ano_letivo INT NOT NULL,
+    semestre INT NOT NULL,
+    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(30) DEFAULT 'Pendente', -- 'Pendente', 'Aprovado', 'Vencido'
+    FOREIGN KEY (id_aluno) REFERENCES Aluno(id_aluno) ON DELETE CASCADE,
+    FOREIGN KEY (id_usuario) REFERENCES Usuario(id_usuario) ON DELETE RESTRICT
 );
 
 -- 8. Tabela de Ocorrências (Occurrences)
@@ -229,13 +229,25 @@ INSERT INTO meetings (id, student_id, meeting_date, meeting_time, type, descript
 (2, 2, '2026-05-28', '09:30:00', 'Atendimento Pedagógico', 'Discussão sobre adaptação nas provas de Contabilidade.', 'Agendada', NULL, NULL),
 (3, 5, '2026-05-30', '10:00:00', 'Reunião com Família', 'Reunião com os pais para alinhamento do plano de acompanhamento.', 'Pendente', NULL, NULL);
 
--- Professores vinculados às Reuniões
-INSERT INTO meeting_teachers (meeting_id, teacher_id) VALUES
-(1, 1), (1, 9), -- Reunião 1: Camila, Rafael
-(2, 4),         -- Reunião 2: Carlos
-(3, 2), (3, 9); -- Reunião 3: Anderson, Rafael
+-- 9. TABELA: REUNIÃO (Conselhos de classe NAPNE, alinhamento pedagógico)
+CREATE TABLE Reuniao (
+    id_reuniao SERIAL PRIMARY KEY,
+    id_turma INT NOT NULL, -- Puxa automaticamente o aluno e os professores daquele semestre
+    data_hora TIMESTAMP NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
+    descricao TEXT,
+    status VARCHAR(30) DEFAULT 'Agendada', -- 'Agendada', 'Realizada', 'Cancelada'
+    FOREIGN KEY (id_turma) REFERENCES Turma(id_turma) ON DELETE CASCADE
+);
 
--- Ocorrências Registradas
-INSERT INTO occurrences (student_id, subject, title, description, occurrence_date, author_id) VALUES
-(1, 'Programação Orientada a Objetos', 'Dificuldade em atividade em grupo', 'Aluno apresentou dificuldade de integração durante atividade colaborativa. Isolou-se do grupo e não concluiu a tarefa.', '2025-05-08', 3),
-(4, 'Química Orgânica', 'Distração recorrente em aula', 'Aluna demonstrou dificuldade em manter o foco durante a explicação da aula prática, levantando-se repetidas vezes da bancada.', '2025-05-14', 8);
+-- 10. TABELA: OCORRÊNCIA (Dificuldades em sala de aula, crises, isolamento)
+CREATE TABLE Ocorrencia (
+    id_ocorrencia SERIAL PRIMARY KEY,
+    id_turma INT NOT NULL,
+    id_usuario INT NOT NULL, -- Professor ou Servidor que testemunhou/registrou
+    titulo VARCHAR(150) NOT NULL,
+    descricao TEXT NOT NULL,
+    data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_turma) REFERENCES Turma(id_turma) ON DELETE CASCADE,
+    FOREIGN KEY (id_usuario) REFERENCES Usuario(id_usuario) ON DELETE RESTRICT
+);
