@@ -1,3 +1,6 @@
-This Figma Make file includes components from [shadcn/ui](https://ui.shadcn.com/) used under [MIT license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md).
+Para rodar o sistema:
 
-This Figma Make file includes photos from [Unsplash](https://unsplash.com) used under [license](https://unsplash.com/license).
+Certifique-se que o Node.js esta instalado em sua máquina (node -v);
+Verifique se o npm também esta na sua máquina (npm -v);
+Após verificar as instalações, instale npm i;
+Depois rode npm run dev.
