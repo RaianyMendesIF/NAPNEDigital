@@ -1,5 +1,3 @@
-from enum import auto
-from warnings import deprecated
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(
