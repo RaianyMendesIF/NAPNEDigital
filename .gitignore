@@ -1,1 +1,81 @@
-node_modules
+# --- Ambiente e segredos ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# --- Python (backend) ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+celerybeat-schedule
+celerybeat.pid
+
+# --- Node / frontend (Vite + React) ---
+node_modules/
+.pnpm-store/
+dist/
+dist-ssr/
+*.local
+.vite/
+.cache/
+.parcel-cache/
+.npm
+.eslintcache
+*.tsbuildinfo
+
+# --- Logs e banco local ---
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Uploads e artefatos gerados ---
+uploads/
+media/
+staticfiles/
+*.bak
+*.swp
+*~
+
+# --- IDE e editor ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.sublime-project
+*.sublime-workspace
+
+# --- SO ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
