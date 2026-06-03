@@ -13,7 +13,7 @@ def create_initial_admin():
     password = "mudar123"
     hash_pass = hash_password(password)
     
-    coordenador = User(
+    coordenador = Usuario(
         siape="1234567890",
         nome="Coordenador SINAPNE",
         email="coordenador@example.com",
