@@ -1,6 +1,6 @@
 import jwt 
 from jwt import InvalidTokenError, ExpiredSignatureError
-from config import ( SECRET_KEY, ALGORITHM )
+from core.config import ( SECRET_KEY, ALGORITHM )
 from datetime import datetime, timedelta, UTC
 
 def create_access_token(

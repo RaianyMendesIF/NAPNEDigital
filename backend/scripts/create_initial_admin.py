@@ -1,9 +1,9 @@
-from backend.core import hash_password
+from core import hash_password
 from models import Usuario
 from sqlalchemy.orm import Session
 from database import engine
 
-def create_initial_admin():
+def create_initial_admin_script():
     db = Session(bind=engine)
 
     admin_exists = db.query(Usuario).filter(Usuario.cargo == "Coordenador").first()
@@ -14,7 +14,7 @@ def create_initial_admin():
     hash_pass = hash_password(password)
     
     coordenador = Usuario(
-        siape="1234567890",
+        siape="1234567",
         nome="Coordenador SINAPNE",
         email="coordenador@example.com",
         senha=hash_pass,
@@ -26,4 +26,4 @@ def create_initial_admin():
     db.commit()
     db.close()
     
-    return coordenador
+    return True
