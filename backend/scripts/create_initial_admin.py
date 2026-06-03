@@ -1,12 +1,12 @@
 from backend.core import hash_password
-from models import User
+from models import Usuario
 from sqlalchemy.orm import Session
 from database import engine
 
 def create_initial_admin():
     db = Session(bind=engine)
 
-    admin_exists = db.query(User).filter(User.cargo == "Coordenador").first()
+    admin_exists = db.query(Usuario).filter(Usuario.cargo == "Coordenador").first()
     if admin_exists:
         return
 
