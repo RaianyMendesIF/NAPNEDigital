@@ -1,3 +1,6 @@
+# NAPNE Digital — monorepo (backend Python + frontend Node/Vite)
+# Aplica-se a todo o repositório (raiz, frontend/, backend/, etc.)
+
 # --- Ambiente e segredos ---
 .env
 .env.*
@@ -18,7 +21,6 @@ env/
 ENV/
 *.egg-info/
 .eggs/
-dist/
 build/
 *.egg
 .pytest_cache/
@@ -34,18 +36,29 @@ dmypy.json
 celerybeat-schedule
 celerybeat.pid
 
-# --- Node / frontend (Vite + React) ---
+# --- Node.js (em qualquer pasta do repo) ---
+**/node_modules/
 node_modules/
 .pnpm-store/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+.eslintcache
+
+# --- Vite / bundlers (cache e build do frontend) ---
+**/.vite/
+.vite/
+**/dist/
 dist/
 dist-ssr/
 *.local
-.vite/
 .cache/
 .parcel-cache/
-.npm
-.eslintcache
-*.tsbuildinfo
+.temp/
+.vercel/
 
 # --- Logs e banco local ---
 *.log
@@ -58,6 +71,7 @@ logs/
 uploads/
 media/
 staticfiles/
+coverage/
 *.bak
 *.swp
 *~
@@ -70,7 +84,7 @@ staticfiles/
 *.sublime-project
 *.sublime-workspace
 
-# --- SO ---
+# --- Sistema operacional ---
 .DS_Store
 .DS_Store?
 ._*
@@ -79,37 +93,3 @@ staticfiles/
 ehthumbs.db
 Thumbs.db
 Desktop.ini
-
-node_modules
-dist
-.vite
-.env
-.env.local
-.DS_Store
-coverage
-node_modules/
-dist/
-build/
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-coverage/
-vite.svg
-.cache/
-.temp/
-*.tsbuildinfo
-*.sqlite
-*.db
-*.log
-.vercel/
-.npm/
