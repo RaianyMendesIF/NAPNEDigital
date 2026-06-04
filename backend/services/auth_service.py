@@ -29,5 +29,6 @@ def login_service(user_data: authRequest, db: Session):
             "cargo": user.cargo,
             "access_token": token,
             "token_type": "bearer",
-        }
+        }, 
+        message="Login realizado com sucesso"
     )
