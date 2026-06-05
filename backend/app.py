@@ -10,6 +10,8 @@ from routes import (
     documentacao_routes,
     atendimento_routes,
     ocorrencia_routes,
+    solicitacao_routes,
+    reuniao_routes,
 )
 from core.config import APP_HOST, APP_PORT, CORS_ORIGINS
 from core.storage import ensure_upload_dirs
@@ -52,6 +54,8 @@ app.include_router(turma_routes)
 app.include_router(documentacao_routes)
 app.include_router(atendimento_routes)
 app.include_router(ocorrencia_routes)
+app.include_router(solicitacao_routes)
+app.include_router(reuniao_routes)
 
 if __name__ == "__main__":
     uvicorn.run(app, host=APP_HOST, port=APP_PORT)

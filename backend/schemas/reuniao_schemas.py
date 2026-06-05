@@ -1,36 +1,30 @@
-from pydantic import BaseModel
-from typing import Optional
-from datetime import date, time
+from datetime import date
+
+from pydantic import BaseModel, Field
+
 
 class ReuniaoCreate(BaseModel):
-    tipo: str
-    descricao: Optional[str] = None
-    data: date
-    horario_inicio: time
-    horario_fim: time
-    turma_id: Optional[int] = None
-    usuario_id: Optional[int] = None
+    turma_id: int
+    titulo: str = Field(min_length=3)
+    descricao: str | None = None
+    data_reuniao: date
+
 
 class ReuniaoUpdate(BaseModel):
-    tipo: Optional[str] = None
-    descricao: Optional[str] = None
-    data: Optional[date] = None
-    horario_inicio: Optional[time] = None
-    horario_fim: Optional[time] = None
-    status: Optional[str] = None
-    turma_id: Optional[int] = None
-    usuario_id: Optional[int] = None
+    titulo: str | None = Field(default=None, min_length=3)
+    descricao: str | None = None
+    data_reuniao: date | None = None
+    status: str | None = None
+
 
 class ReuniaoResponse(BaseModel):
     id: int
-    tipo: str
-    descricao: Optional[str]
-    data: date
-    horario_inicio: time
-    horario_fim: time
+    turma_id: int
+    aluno_id: int | None
+    titulo: str
+    descricao: str | None
+    data_reuniao: date
+    horario_inicio: str
+    horario_fim: str
     status: str
-    turma_id: Optional[int]
-    usuario_id: Optional[int]
-
-    class Config:
-        from_attributes = True
+    usuario_id: int

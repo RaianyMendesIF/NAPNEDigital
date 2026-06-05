@@ -5,8 +5,10 @@ from datetime import datetime
 from database.database import Base
 
 class StatusSolicitacao(str, enum.Enum):
-    CONCLUIDO = "Concluido"
-    PENDENTE = "Pendente"
+    EM_ANALISE = "EM_ANALISE"
+    DEFERIDO = "DEFERIDO"
+    INDEFERIDO = "INDEFERIDO"
+
 
 class Solicitacao(Base):
     __tablename__ = "solicitacoes"
@@ -16,7 +18,8 @@ class Solicitacao(Base):
     data_solicitacao = Column(Date, default=datetime.now)
     status = Column(
         Enum(StatusSolicitacao, native_enum=False),
-        default=StatusSolicitacao.PENDENTE,
+        default=StatusSolicitacao.EM_ANALISE,
         nullable=False,
     )
     turma_id = Column(Integer, ForeignKey("turmas.id"))
+    usuario_solicitante_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
