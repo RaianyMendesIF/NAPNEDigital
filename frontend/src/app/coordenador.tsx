@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, CalendarDays, FileText, AlertTriangle,
   BarChart2, Settings, Bell, ChevronDown, Search, Plus, Filter,
@@ -7,6 +7,13 @@ import {
   Phone, Mail, Shield, Star, Activity, ChevronLeft,
   ArrowLeft, IdCard, GraduationCap, Edit2, Save, Trash2,
 } from "lucide-react";
+import { apiClient } from "../services/api";
+import type { LoggedInUser } from "./App";
+import type {
+  Aluno as BackendAluno,
+  Reuniao as BackendReuniao,
+  Ocorrencia as BackendOcorrencia,
+} from "../services/api";
 
 
 type Screen = "overview" | "students" | "servers" | "record" | "log" | "meetings" | "occurrences" | "profile";
@@ -39,7 +46,7 @@ interface Student {
 interface StaffMember {
   id: string;
   name: string;
-  role: 'Responsável' | 'Psicólogo' | 'Agente' | 'Coordenador SINAPNE';
+  role: 'Professor' | 'Psiclogo' | 'Agente' | 'Coordenador';
   email: string;
   siape: string;
   students?: Student[];
@@ -81,100 +88,24 @@ interface CareLog {
 interface ClassHistory {
   id: string;
   course: string;
-  gradeYear: string;   // Ex: "2º Ano" ou "3º Semestre"
+  gradeYear: string;   // Ex: "2 Ano" ou "3 Semestre"
   schoolYear: number;  // Ex: 2026
   semester: number;    // Ex: 1 ou 2
-  status: 'Ativo' | 'Acompanhamento' | 'Concluído' | 'Evadido' | 'Trancado';
+  status: 'Ativo' | 'Acompanhamento' | 'Concludo' | 'Evadido' | 'Trancado';
   teachers: string[];  // Nomes dos professores vinculados neste semestre
 }
 
-// ── Data ───────────────────────────────────────────────────────────────────
-const STUDENTS: Student[] = [
-  { id: "1", name: "Lucas Henrique Moreira", registration: "2023001", need: "TEA", needColor: "blue", course: "Técnico em Informática", year: "2º Ano", status: "Ativo", alert: true, teachers: ["Camila Rocha"], lastCareDate: "2026-05-22" },
-  { id: "2", name: "Ana Clara Ferreira", registration: "2023045", need: "Deficiência Visual", needColor: "purple", course: "Técnico em Administração", year: "1º Ano", status: "Ativo", teachers: ["Carlos Mendes", "Renata Souza"], lastCareDate: "2026-05-15" },
-  { id: "3", name: "Matheus Souza Costa", registration: "2022088", need: "Altas Habilidades", needColor: "teal", course: "Técnico em Eletrotécnica", year: "3º Ano", status: "Acompanhamento", teachers: ["Roberto Alves", "Fernanda Costa"], lastCareDate: "2026-04-28" },
-  { id: "4", name: "Isabela Ramos Nunes", registration: "2023112", need: "TDAH", needColor: "amber", course: "Técnico em Química", year: "2º Ano", status: "Ativo", teachers: ["Camila Rocha", "Diego Faria"], lastCareDate: "2026-04-10" },
-  { id: "5", name: "Gabriel Pereira Lima", registration: "2021034", need: "Deficiência Auditiva", needColor: "indigo", course: "Técnico em Informática", year: "3º Ano", status: "Ativo", teachers: ["Anderson Lima", "Juliana Castro"], lastCareDate: "2026-05-20" },
-  { id: "6", name: "Vitória Almeida Santos", registration: "2023078", need: "Dislexia", needColor: "rose", course: "Técnico em Administração", year: "1º Ano", status: "Acompanhamento", teachers: ["Carlos Mendes", "Renata Souza"], lastCareDate: "2026-04-05" },
-];
 
-const INITIAL_TIMELINE_EVENTS: CareLog[] = [
-  { id: 1, studentName: "Lucas Henrique Moreira", date: "22 Mai 2026", time: "14:30", type: "Atendimento Individual", staff: "Camila Rocha", text: "Conversa sobre adaptações nas avaliações de Matemática. Aluno demonstrou progresso significativo na comunicação verbal. Revisados recursos de apoio disponíveis." },
-  { id: 2, studentName: "Ana Clara Ferreira", date: "15 Mai 2026", time: "10:00", type: "Reunião com Pais", staff: "Coord. Rafael Mendes", text: "Reunião com a mãe, Sra. Patrícia Moreira. Discutidas estratégias de rotina em casa para reforçar os trabalhos realizados no campus." },
-  { id: 3, studentName: "Gabriel Pereira Lima", date: "08 Mai 2026", time: "09:15", type: "Ocorrência Comportamental", staff: "Juliana Castro", text: "Aluno apresentou dificuldade de integração em atividade de grupo na aula de P.O.O. Equipe notificada. Plano de intervenção revisado." },
-  { id: 4, studentName: "Matheus Souza Costa", date: "28 Abr 2026", time: "11:00", type: "Solicitação de Prorrogação", staff: "Coord. Rafael Mendes", text: "Prorrogação de 7 dias concedida para entrega do TCC semestral (Disciplina: Banco de Dados). Deferido conforme PEI vigente." },
-  { id: 5, studentName: "Isabela Ramos Nunes", date: "10 Abr 2026", time: "15:45", type: "Atendimento Individual", staff: "Camila Rocha", text: "Sessão de acompanhamento pedagógico. Elaboração de mapa mental para organização dos conteúdos do semestre." },
-];
-
-const TIMELINE_EVENTS = [
-  { date: "22 Mai 2025", time: "14:30", type: "Atendimento Individual", staff: "Camila Rocha", text: "Conversa sobre adaptações nas avaliações de Matemática. Aluno demonstrou progresso significativo na comunicação verbal. Revisados recursos de apoio disponíveis." },
-  { date: "15 Mai 2025", time: "10:00", type: "Reunião com Pais", staff: "Coord. Rafael Mendes", text: "Reunião com a mãe, Sra. Patrícia Moreira. Discutidas estratégias de rotina em casa para reforçar os trabalhos realizados no campus." },
-  { date: "08 Mai 2025", time: "09:15", type: "Ocorrência Comportamental", staff: "Juliana Castro", text: "Aluno apresentou dificuldade de integração em atividade de grupo na aula de P.O.O. Equipe notificada. Plano de intervenção revisado." },
-  { date: "28 Abr 2025", time: "11:00", type: "Solicitação de Prorrogação", staff: "Coord. Rafael Mendes", text: "Prorrogação de 7 dias concedida para entrega do TCC semestral (Disciplina: Banco de Dados). Deferido conforme PEI vigente." },
-  { date: "10 Abr 2025", time: "15:45", type: "Atendimento Individual", staff: "Camila Rocha", text: "Sessão de acompanhamento pedagógico. Elaboração de mapa mental para organização dos conteúdos do semestre." },
-];
-
-const INITIAL_MEETINGS: MeetingEvent[] = [
-  { id: 1, studentName: "Lucas Henrique Moreira", date: "2026-05-26", time: "14:00", description: "Revisão do PEI semestral com equipe docente.", teachers: ["Profa. Camila Rocha"], type: "Revisão de PEI", status: "Concluída", completedAt: "2026-05-26 14:45", completedBy: "Profa. Camila Rocha" },
-  { id: 2, studentName: "Ana Clara Ferreira", date: "2026-05-28", time: "09:30", description: "Discussão sobre adaptação nas provas de Contabilidade.", teachers: ["Prof. Carlos Mendes"], type: "Atendimento Pedagógico", status: "Agendada" },
-  { id: 3, studentName: "Gabriel Pereira Lima", date: "2026-05-30", time: "10:00", description: "Reunião com os pais para alinhamento do plano de acompanhamento.", teachers: ["Prof. Anderson Lima", "Coord. Rafael Mendes"], type: "Reunião com Família", status: "Pendente" },
-];
-
-const INITIAL_OCCURRENCES: Occurrence[] = [
-  { id: 1, studentName: "Gabriel Pereira Lima", subject: "Programação Orientada a Objetos", title: "Dificuldade de socialização em atividades de grupo", description: "Aluno apresentou resistência em participar de atividades em grupo, isolando-se durante a aula prática. Foi necessário intervenção da professora para incentivar a participação.", date: "08/05/2025", author: "Profa. Juliana Castro" },
-  { id: 2, studentName: "Isabela Ramos Nunes", subject: "Química Orgânica", title: "Distração recorrente em aula", description: "Aluna demonstrou dificuldade em manter o foco durante a explicação da aula prática, levantando-se repetidas vezes da bancada.", date: "14/05/2025", author: "Diego Faria" },
-];
-
-const INITIAL_STAFF: StaffMember[] = [
-  { id: "1", name: "Camila Rocha", role: "Professor", email: "camila.rocha@instituto.edu.br", siape: "1029384" },
-  { id: "2", name: "Anderson Lima", role: "Professor", email: "anderson.lima@instituto.edu.br", siape: "2048593" },
-  { id: "3", name: "Juliana Castro", role: "Professor", email: "juliana.castro@instituto.edu.br", siape: "9384751" },
-  { id: "4", name: "Carlos Mendes", role: "Professor", email: "carlos.mendes@instituto.edu.br", siape: "5729481" },
-  { id: "9", name: "Coord. Rafael Mendes", role: "Coordenador NAPNE", email: "rafael.mendes@instituto.edu.br", siape: "8472910" },
-];
-
-const AVAILABLE_TEACHERS = [
-  "Camila Rocha", "Anderson Lima", "Juliana Castro",
-  "Carlos Mendes", "Renata Souza", "Rafael Mendes"
-];
-
-const INITIAL_HISTORY: ClassHistory[] = [
-  {
-    id: "class-2",
-    course: "Técnico em Informática",
-    gradeYear: "2º Ano",
-    schoolYear: 2026,
-    semester: 1,
-    status: "Ativo",
-    teachers: ["Camila Rocha", "Anderson Lima"]
-  },
-  {
-    id: "class-1",
-    course: "Técnico em Informática",
-    gradeYear: "1º Ano",
-    schoolYear: 2025,
-    semester: 2,
-    status: "Concluído",
-    teachers: ["Carlos Mendes", "Renata Souza"]
-  }
-];
-
-// Usuários do sistema
-const USERS: User[] = [
-  { id: "1", siape: "8472910", name: "Rafael Mendes", email: "rafael.mendes@ifms.edu.br", role: "Coordenadora" },
-  { id: "2", siape: "1029384", name: "Camila Rocha", email: "camila.rocha@ifms.edu.br", role: "Acompanhadora" },
-  { id: "3", siape: "2048593", name: "Anderson Lima", email: "anderson.lima@ifms.edu.br", role: "Acompanhadora" },
-  { id: "4", siape: "9384751", name: "Juliana Castro", email: "juliana.castro@ifms.edu.br", role: "Acompanhadora" },
-  { id: "5", siape: "5729481", name: "Carlos Mendes", email: "carlos.mendes@ifms.edu.br", role: "Acompanhadora" },
-];
-
-// Mapeamento de quais alunos cada acompanhadora acompanha
-const ACOMPANHADORA_STUDENTS: Record<string, string[]> = {
-  "2": ["1", "4"],      // Camila acompanha Lucas e Isabela
-  "3": ["1", "5"],      // Anderson acompanha Lucas e Gabriel
-  "4": ["1", "5"],      // Juliana acompanha Lucas e Gabriel
-  "5": ["2", "6"],      // Carlos acompanha Ana e Vitória
-};
+const STUDENTS: Student[] = [];
+const INITIAL_TIMELINE_EVENTS: CareLog[] = [];
+const TIMELINE_EVENTS: CareLog[] = [];
+const INITIAL_MEETINGS: MeetingEvent[] = [];
+const INITIAL_OCCURRENCES: Occurrence[] = [];
+const INITIAL_STAFF: StaffMember[] = [];
+const AVAILABLE_TEACHERS: string[] = [];
+const INITIAL_HISTORY: ClassHistory[] = [];
+const USERS: User[] = [];
+const ACOMPANHADORA_STUDENTS: Record<string, string[]> = {};
 
 // Função utilitária para calcular dias desde última data
 const calculateDaysSince = (dateString?: string): number => {
@@ -186,8 +117,77 @@ const calculateDaysSince = (dateString?: string): number => {
   return diffDays;
 };
 
+const needColorFor = (need: string) => {
+  const colors: Record<string, string> = {
+    TEA: "blue",
+    TDAH: "amber",
+    "Deficiência Visual": "purple",
+    "Deficiência Auditiva": "indigo",
+    "Altas Habilidades": "teal",
+    Dislexia: "rose",
+  };
 
-// ── Utility components ─────────────────────────────────────────────────────
+  return colors[need] ?? "green";
+};
+
+const toStudent = (aluno: BackendAluno): Student => ({
+  id: String(aluno.id),
+  name: aluno.nome,
+  registration: aluno.matricula,
+  need: aluno.necessidade_especial,
+  needColor: needColorFor(aluno.necessidade_especial),
+  course: aluno.curso,
+  year: aluno.ano,
+  status:
+    aluno.status === "Inativo"
+      ? "Inativo"
+      : aluno.status === "Acompanhamento"
+        ? "Acompanhamento"
+        : "Ativo",
+  teachers: [],
+});
+
+const toMeeting = (reuniao: BackendReuniao): MeetingEvent => {
+  const [studentLine, ...descriptionLines] = (reuniao.descricao ?? "").split("\n");
+
+  return {
+    id: reuniao.id,
+    studentName: studentLine.startsWith("Aluno: ")
+      ? studentLine.replace("Aluno: ", "").trim()
+      : "Aluno não informado",
+    date: reuniao.data,
+    time: reuniao.horario_inicio.slice(0, 5),
+    description: descriptionLines.join("\n").trim(),
+    teachers: [],
+    type: reuniao.tipo,
+    status:
+      reuniao.status === "Concluída" || reuniao.status === "Pendente"
+        ? reuniao.status
+        : "Agendada",
+  };
+};
+
+const toOccurrence = (ocorrencia: BackendOcorrencia): Occurrence => {
+  const [studentLine, subjectLine, ...descriptionLines] = ocorrencia.descricao.split("\n");
+
+  return {
+    id: ocorrencia.id,
+    studentName: studentLine?.startsWith("Aluno: ")
+      ? studentLine.replace("Aluno: ", "").trim()
+      : "Aluno não informado",
+    subject: subjectLine?.startsWith("Disciplina: ")
+      ? subjectLine.replace("Disciplina: ", "").trim()
+      : "Não especificado",
+    title: ocorrencia.titulo,
+    description: descriptionLines.join("\n").trim() || ocorrencia.descricao,
+    date: new Date(`${ocorrencia.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
+    author: "Sistema",
+  };
+};
+
+
+
+//  Utility components 
 const Badge = ({ text, color }: { text: string; color: string }) => {
   const map: Record<string, string> = {
     blue: "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
@@ -246,7 +246,7 @@ const KpiCard = ({
   </button>
 );
 
-// ── Sidebar ────────────────────────────────────────────────────────────────
+//  Sidebar 
 const NAV_ITEMS = [
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
   { id: "students", label: "Alunos", icon: Users },
@@ -308,7 +308,7 @@ function Sidebar({
             <span className="text-white text-xs font-bold">RM</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-white text-xs font-semibold leading-tight truncate">Rafael Mendes</p>
+            <p className="text-white text-xs font-semibold leading-tight truncate">Usurio</p>
             <p className="text-[10px] leading-tight" style={{ color: "var(--sidebar-foreground)" }}>Coordenador NAPNE</p>
           </div>
           <button
@@ -323,7 +323,7 @@ function Sidebar({
   );
 }
 
-// ── Topbar ─────────────────────────────────────────────────────────────────
+//  Topbar 
 function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => void }) {
   const [notifOpen, setNotifOpen] = useState(false);
   return (
@@ -344,11 +344,7 @@ function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => 
                 <p className="text-sm font-semibold text-foreground">Notificações</p>
                 <span className="text-xs font-mono bg-red-50 text-red-600 px-1.5 py-0.5 rounded">3 novas</span>
               </div>
-              {[
-                { icon: AlertCircle, color: "text-red-500", title: "Documentação pendente", sub: "Lucas Moreira · Laudo médico vencido", time: "Agora" },
-                { icon: CalendarDays, color: "text-blue-500", title: "Reunião confirmada", sub: "Pais de Ana Clara · 26/05 às 14h", time: "2h atrás" },
-                { icon: FileText, color: "text-teal-500", title: "Novo PEI submetido", sub: "Matheus Costa · Revisão pendente", time: "Ontem" },
-              ].map((n, i) => (
+              {([] as { icon: typeof AlertCircle; color: string; title: string; sub: string; time: string }[]).map((n, i) => (
                 <div key={i} className="px-4 py-3 hover:bg-secondary/40 transition-colors flex gap-3 border-b border-border last:border-0 cursor-pointer">
                   <n.icon size={16} className={`mt-0.5 flex-shrink-0 ${n.color}`} />
                   <div>
@@ -366,7 +362,7 @@ function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => 
             <span className="text-white text-xs font-bold">RM</span>
           </div>
           <div className="hidden sm:block">
-            <p className="text-xs font-semibold text-foreground leading-tight">Rafael Mendes</p>
+            <p className="text-xs font-semibold text-foreground leading-tight">Usurio</p>
             <p className="text-[10px] text-muted-foreground leading-tight">Coordenador</p>
           </div>
           <ChevronDown size={14} className="text-muted-foreground" />
@@ -376,7 +372,7 @@ function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => 
   );
 }
 
-// ── SCREEN: Login ──────────────────────────────────────────────────────────
+//  SCREEN: Login 
 function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   const [siape, setSiape] = useState("");
   const [pass, setPass] = useState("");
@@ -385,19 +381,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
-    
-    setTimeout(() => {
-      const user = USERS.find(u => u.siape === siape);
-      if (user) {
-        setLoading(false);
-        onLogin(user);
-      } else {
-        setLoading(false);
-        setError("SIAPE ou senha inválidos");
-      }
-    }, 900);
+    setLoading(false);
+    setError("Use o login principal integrado ao backend.");
   };
 
   return (
@@ -449,7 +434,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
                   type="text"
                   value={siape}
                   onChange={e => setSiape(e.target.value)}
-                  placeholder="Ex: 8472910"
+                  placeholder="Ex: 0000000"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-input-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-accent transition-all"
                 />
               </div>
@@ -462,7 +447,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
                   type="password"
                   value={pass}
                   onChange={e => setPass(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder=""
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-input-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-accent transition-all"
                 />
               </div>
@@ -494,9 +479,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
 
           <div className="mt-6 space-y-3">
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-              <p className="text-xs font-semibold text-blue-900 mb-2">👤 Usuários de Teste</p>
-              <p className="text-xs text-blue-700 font-mono">Coordenadora: 8472910 (Rafael Mendes)</p>
-              <p className="text-xs text-blue-700 font-mono">Acompanhadora: 1029384 (Camila Rocha)</p>
+              <p className="text-xs font-semibold text-blue-900 mb-2"> Usuários de Teste</p>
+              
             </div>
             <div className="p-3 rounded-lg bg-secondary/60 border border-border">
               <p className="text-xs text-muted-foreground text-center">
@@ -511,26 +495,58 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
-// ── SCREEN: Overview (Dashboard) ───────────────────────────────────────────
-function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
+//  SCREEN: Overview (Dashboard) 
+function OverviewScreen({
+  students,
+  meetings,
+  careLogs,
+  occurrences,
+  onNav,
+}: {
+  students: Student[];
+  meetings: MeetingEvent[];
+  careLogs: CareLog[];
+  occurrences: Occurrence[];
+  onNav: (s: Screen) => void;
+}) {
+  const activeStudents = students.filter((student) => student.status === "Ativo").length;
+  const pendingCareLogs = students.filter(
+    (student) => !careLogs.some((log) => log.studentName === student.name)
+  ).length;
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+  const meetingsThisWeek = meetings.filter((meeting) => {
+    const meetingDate = new Date(`${meeting.date}T00:00:00`);
+    return meetingDate >= startOfWeek && meetingDate < endOfWeek;
+  });
+  const nextMeeting = [...meetings]
+    .filter((meeting) => new Date(`${meeting.date}T${meeting.time || "00:00"}`) >= today)
+    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0];
+
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
             icon={Users}
             label="Alunos Ativos"
-            value={47}
-            sub="+3 este semestre"
+            value={activeStudents}
+            sub={`${students.length} aluno${students.length !== 1 ? "s" : ""} cadastrado${students.length !== 1 ? "s" : ""}`}
             color="bg-primary"
             onClick={() => onNav("students")}
       />
-        <KpiCard icon={Clock} label="Atend. Pendentes" value={8} sub="Aguardando registro" color="bg-amber-500" />
-        <KpiCard icon={FileText} label="Prorrogações" value={5} sub="Concedidas este mês" color="bg-teal-600" />
+        <KpiCard icon={Clock} label="Atend. Pendentes" value={pendingCareLogs} sub="Aguardando registro" color="bg-amber-500" />
+        <KpiCard icon={FileText} label="Prorrogações" value={0} sub="Sem dados cadastrados" color="bg-teal-600" />
         <KpiCard
           icon={CalendarDays}
           label="Reuniões na Semana"
-          value={3}
-          sub="Próxima: 26/05 às 14h"
+          value={meetingsThisWeek.length}
+          sub={nextMeeting ? `Próxima: ${nextMeeting.date.split("-").reverse().join("/")} às ${nextMeeting.time}` : "Nenhuma reunião agendada"}
           color="bg-indigo-600"
           onClick={() => onNav("meetings")}
         />
@@ -543,7 +559,7 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
             <button className="text-xs font-medium hover:underline" style={{ color: "var(--accent)" }}>Ver todas</button>
           </div>
           <ul className="divide-y divide-border">
-            {TIMELINE_EVENTS.slice(0, 4).map((ev, i) => (
+            {careLogs.slice(0, 4).map((ev, i) => (
               <li key={i} className="px-5 py-3.5 flex gap-4 hover:bg-secondary/30 transition-colors">
                 <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 mt-0.5">
                   {ev.type.includes("Ocorrência") ? <AlertTriangle size={14} className="text-amber-500" /> :
@@ -554,7 +570,7 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs font-semibold text-foreground">Lucas Henrique Moreira</p>
+                      <p className="text-xs font-semibold text-foreground">Nenhum aluno cadastrado</p>
                       <p className="text-xs text-muted-foreground">{ev.type} · {ev.staff}</p>
                     </div>
                     <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{ev.date}</span>
@@ -563,6 +579,11 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
                 </div>
               </li>
             ))}
+            {careLogs.length === 0 && (
+              <li className="px-5 py-8 text-center text-sm text-muted-foreground">
+                Nenhuma atividade cadastrada.
+              </li>
+            )}
           </ul>
         </div>
 
@@ -571,27 +592,29 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
             <div className="px-4 py-3.5 border-b border-border flex items-center gap-2">
               <AlertCircle size={15} className="text-red-500" />
               <h2 className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Alertas Críticos</h2>
-              <span className="ml-auto font-mono text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded">2</span>
+              <span className="ml-auto font-mono text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded">{occurrences.length}</span>
             </div>
-            {[
-              { name: "Lucas H. Moreira", msg: "Laudo médico vencido", color: "text-red-500" },
-              { name: "Isabela R. Nunes", msg: "PEI não atualizado em 90d", color: "text-amber-500" },
-            ].map((a, i) => (
+            {occurrences.slice(0, 2).map((a, i) => (
               <div key={i} className="px-4 py-3 flex items-start gap-2.5 border-b border-border last:border-0">
-                <AlertCircle size={14} className={`mt-0.5 flex-shrink-0 ${a.color}`} />
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-red-500" />
                 <div>
-                  <p className="text-xs font-medium text-foreground">{a.name}</p>
-                  <p className="text-xs text-muted-foreground">{a.msg}</p>
+                  <p className="text-xs font-medium text-foreground">{a.studentName}</p>
+                  <p className="text-xs text-muted-foreground">{a.title}</p>
                 </div>
               </div>
             ))}
+            {occurrences.length === 0 && (
+              <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+                Nenhum alerta cadastrado.
+              </div>
+            )}
           </div>
 
           <div className="bg-card rounded-lg border border-border">
             <div className="px-4 py-3.5 border-b border-border">
               <h2 className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Agenda da Semana</h2>
             </div>
-            {INITIAL_MEETINGS.map((m, i) => (
+            {meetingsThisWeek.map((m, i) => (
               <div key={i} className="px-4 py-3 flex gap-3 border-b border-border last:border-0">
                 <div className="w-1 rounded-full self-stretch bg-blue-500" />
                 <div>
@@ -600,6 +623,11 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
                 </div>
               </div>
             ))}
+            {meetingsThisWeek.length === 0 && (
+              <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+                Nenhuma reunião na semana.
+              </div>
+            )}
           </div>
 
           <button onClick={() => onNav("students")} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: "var(--primary)" }}>
@@ -611,7 +639,7 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
   );
 }
 
-// ── SCREEN: Students ───────────────────────────────────────────────────────
+//  SCREEN: Students 
 function StudentsScreen({
   students,
   setStudents,
@@ -638,18 +666,24 @@ function StudentsScreen({
     (s.name.toLowerCase().includes(search.toLowerCase()) || s.registration.includes(search))
   );
 
-  const handleSaveStudent = () => {
+  const handleSaveStudent = async () => {
     if (!newStudentName.trim() || !newRegistration.trim()) return;
+    const savedStudent = await apiClient.createAluno({
+      matricula: newRegistration.trim(),
+      nome: newStudentName.trim(),
+      data_nascimento: "2000-01-01",
+      cpf: `000${newRegistration.trim()}`.slice(-11),
+      telefone: "",
+      curso: newCourse,
+      ano: newYear,
+      necessidade_especial: newNeed,
+      cid: "Não informado",
+      observacao: "",
+    });
 
     const newStudent: Student = {
-      id: String(Date.now()),
-      name: newStudentName,
-      registration: newRegistration,
-      need: newNeed,
-      needColor: "green",
-      course: newCourse,
-      year: newYear,
-      status: "Ativo",
+      ...toStudent(savedStudent),
+      needColor: needColorFor(newNeed),
       teachers: [],
     };
 
@@ -778,7 +812,7 @@ function StudentsScreen({
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground">Informações da entrevista familiar inicial (Anamnese).</p>
                   <div><label className="text-xs font-medium text-foreground block mb-1">Nome do Responsável Principal</label><input placeholder="Nome completo" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Histórico Médico / Diagnóstico Resumido</label><textarea rows={3} placeholder="Descreva o histórico do aluno..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Histórico Médico / Diagnóstico Resumido</label><textarea rows={3} placeholder="Descreva o histrico do aluno..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                   <div><label className="text-xs font-medium text-foreground block mb-1">Observações / Preferências de Comunicação</label><textarea rows={2} placeholder="Outras informações relevantes..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
@@ -819,20 +853,19 @@ function CorpoDocenteView({
     if (!newName.trim() || !newEmail.trim() || !newSiape.trim()) return;
 
     const newMember: StaffMember = {
-      id: String(staffList.length + 1),
-      name: newName,
+      id: String(Date.now()),
+      name: newName.trim(),
       role: newRole,
-      email: newEmail,
-      siape: newSiape,
-      // Mock de alunos associados para novos cadastros
-      students: [] 
+      email: newEmail.trim(),
+      siape: newSiape.trim(),
+      students: [],
     };
 
-    setStaffList([...staffList, newMember]);
-    setNewName('');
-    setNewEmail('');
-    setNewSiape('');
-    setNewRole('Responsável');
+    setStaffList((current) => [...current, newMember]);
+    setNewName("");
+    setNewEmail("");
+    setNewSiape("");
+    setNewRole("Professor");
     setIsModalOpen(false);
   };
 
@@ -908,7 +941,7 @@ function CorpoDocenteView({
                     <tr key={student.id} className="hover:bg-gray-50/60 transition-colors">
                       <td className="py-3 px-4 font-semibold text-gray-700">{student.name}</td>
                       <td className="py-3 px-4 text-gray-500 font-mono text-xs">#{student.registration}</td>
-                      <td className="py-3 px-4 text-gray-600">{student.course} — {student.year}</td>
+                      <td className="py-3 px-4 text-gray-600">{student.course}  {student.year}</td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
                           {student.need}
@@ -1052,9 +1085,8 @@ function CorpoDocenteView({
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="Professor">Professor(a)</option>
-                    <option value="Psicólogo">Psicólogo(a)</option>
+                    <option value="Psiclogo">Psiclogo(a)</option>
                     <option value="Agente">Agente</option>
-                    <option value="Coordenador SINAPNE">Coordenador(a) SINAPNE</option>
                   </select>
                 </div>
               </div>
@@ -1095,7 +1127,7 @@ function CorpoDocenteView({
 }
 
 
-// ── SCREEN: Care Log & Management (Atendimentos Screen) ──────────────────────
+//  SCREEN: Care Log & Management (Atendimentos Screen) 
 function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAddLogClick: () => void }) {
   const [search, setSearch] = useState("");
 
@@ -1171,7 +1203,7 @@ function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAdd
 }
 
 
-/// ── SCREEN: Student Record ─────────────────────────────────────────────────
+///  SCREEN: Student Record 
 function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOccurrence }: {
   studentId: string;
   onBack: () => void;
@@ -1181,14 +1213,10 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
 }) {
   // 1. Atualizado o Estado da Tab para incluir "classes"
   const [tab, setTab] = useState<"timeline" | "pei" | "requests" | "classes">("timeline");
-  const student = STUDENTS.find(s => s.id === studentId) ?? STUDENTS[0];
 
   // 2. Estados adicionados para gerenciar o histórico de turmas e modal local
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
-  const [classHistory, setClassHistory] = useState([
-    { id: "c1", course: "Técnico em Informática", gradeYear: "2º Ano", schoolYear: 2026, semester: 1, status: "Ativo", teachers: ["Camila Rocha", "Anderson Lima", "Juliana Castro"] },
-    { id: "c2", course: "Técnico em Informática", gradeYear: "1º Ano", schoolYear: 2025, semester: 2, status: "Concluído", teachers: ["Carlos Mendes", "Renata Souza"] }
-  ]);
+  const [classHistory, setClassHistory] = useState<ClassHistory[]>([]);
   
   // Estados do formulário de nova turma
   const [newGradeYear, setNewGradeYear] = useState('');
@@ -1197,7 +1225,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
   // Lista de docentes disponíveis para o checkbox do modal (Baseado no seu corpo docente)
-  const AVAILABLE_TEACHERS = ["Profa. Camila Rocha", "Prof. Anderson Lima", "Profa. Juliana Castro", "Prof. Carlos Mendes", "Profa. Renata Souza", "Prof. Diego Faria"];
+  const AVAILABLE_TEACHERS: string[] = [];
 
   const typeStyle = (type: string) => {
     if (type.includes("Ocorrência")) return { icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50" };
@@ -1330,7 +1358,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
           
           {tab === "pei" && (
             <div className="space-y-3">
-              {[{ title: "PEI 2025/1 — Vigente", date: "10/02/2025", author: "Coord. Rafael Mendes", status: "Ativo" as const }, { title: "PEI 2024/2 — Encerrado", date: "05/08/2024", author: "Coord. Rafael Mendes", status: "Inativo" as const }].map((p, i) => (
+              {([] as { title: string; date: string; author: string; status: "Ativo" | "Inativo" }[]).map((p, i) => (
                 <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-border hover:bg-secondary/20 transition-colors">
                   <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0"><FileText size={18} className="text-blue-600" /></div>
                   <div className="flex-1 min-w-0">
@@ -1347,9 +1375,9 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
           {tab === "requests" && (
             <div className="space-y-3">
               {[
-                { type: "Prorrogação de Prazo", subject: "TCC Semestral — Banco de Dados", days: 7, date: "28/04/2025", status: "Deferida", statusColor: "green" },
-                { type: "Prorrogação de Prazo", subject: "Avaliação Unidade II — Matemática", days: 5, date: "10/03/2025", status: "Deferida", statusColor: "green" },
-                { type: "Adaptação de Avaliação", subject: "Física — Prova P2", days: null, date: "01/03/2025", status: "Pendente", statusColor: "amber" },
+                { type: "Prorrogação de Prazo", subject: "TCC Semestral  Banco de Dados", days: 7, date: "28/04/2025", status: "Deferida", statusColor: "green" },
+                { type: "Prorrogação de Prazo", subject: "Avaliação Unidade II  Matemática", days: 5, date: "10/03/2025", status: "Deferida", statusColor: "green" },
+                { type: "Adaptação de Avaliação", subject: "Física  Prova P2", days: null, date: "01/03/2025", status: "Pendente", statusColor: "amber" },
               ].map((r, i) => (
                 <div key={i} className="p-4 rounded-lg border border-border flex items-start gap-3">
                   <Clock size={16} className="text-teal-500 mt-0.5 flex-shrink-0" />
@@ -1390,7 +1418,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                           <span className={`inline-block text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mr-2 ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-secondary text-muted-foreground'}`}>
                             {item.schoolYear}.{item.semester}
                           </span>
-                          <span className="text-sm font-bold text-foreground">{item.course} — {item.gradeYear}</span>
+                          <span className="text-sm font-bold text-foreground">{item.course}  {item.gradeYear}</span>
                         </div>
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
                           {item.status}
@@ -1500,7 +1528,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
   );
 }
 
-// ── SCREEN: Log Interaction ────────────────────────────────────────────────
+//  SCREEN: Log Interaction 
 function LogScreen({ onBack }: { onBack: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1519,7 +1547,7 @@ function LogScreen({ onBack }: { onBack: () => void }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
-                <select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">{STUDENTS.map(s => <option key={s.id}>{s.name} — #{s.registration}</option>)}</select>
+                <select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">{([] as Student[]).map(s => <option key={s.id}>{s.name}  #{s.registration}</option>)}</select>
               </div>
               <div>
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Tipo de Interação *</label>
@@ -1533,7 +1561,7 @@ function LogScreen({ onBack }: { onBack: () => void }) {
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Servidor Responsável</label>
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground"><Shield size={14} /><span>Rafael Mendes — Coordenador NAPNE</span><span className="ml-auto text-[10px] font-mono bg-secondary px-1.5 py-0.5 rounded">Somente leitura</span></div>
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground"><Shield size={14} /><span>Usurio  Coordenador NAPNE</span><span className="ml-auto text-[10px] font-mono bg-secondary px-1.5 py-0.5 rounded">Somente leitura</span></div>
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Relato Descritivo *</label>
@@ -1544,7 +1572,7 @@ function LogScreen({ onBack }: { onBack: () => void }) {
                 <div onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={e => { e.preventDefault(); setDragOver(false); }} className={`border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer ${dragOver ? "border-accent bg-teal-50" : "border-border bg-secondary/20 hover:bg-secondary/40"}`} style={dragOver ? { borderColor: "var(--accent)" } : {}}>
                   <Upload size={20} className="mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm font-medium text-foreground">Arraste arquivos ou clique para selecionar</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">PDF, JPG, PNG — máx. 10MB por arquivo</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">PDF, JPG, PNG  máx. 10MB por arquivo</p>
                 </div>
               </div>
             </div>
@@ -1559,14 +1587,15 @@ function LogScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-// ── SCREEN: Meetings Calendar ──────────────────────────────────────────────
+//  SCREEN: Meetings Calendar 
 const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-function MeetingsScreen({ meetings, setMeetings, prefilledStudent }: {
+function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
   meetings: MeetingEvent[];
   setMeetings: React.Dispatch<React.SetStateAction<MeetingEvent[]>>;
   prefilledStudent: Student | null;
+  students: Student[];
 }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -1595,10 +1624,20 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent }: {
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formStudent || !formDate || !formTime) return;
+    const savedMeeting = await apiClient.createReuniao({
+      tipo: formType,
+      descricao: `Aluno: ${formStudent}\n${formDesc}`,
+      data: formDate,
+      horario_inicio: formTime,
+      horario_fim: formTime,
+      turma_id: undefined,
+      usuario_id: undefined,
+    });
+
     const newMeeting: MeetingEvent = {
-      id: Date.now(),
+      id: savedMeeting.id,
       studentName: formStudent,
       date: formDate,
       time: formTime,
@@ -1614,7 +1653,7 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent }: {
   const selectedDayStr = selectedDay ? `${year}-${String(month + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}` : null;
   const selectedDayMeetings = selectedDay ? meetingsOnDay(selectedDay) : [];
 
-  const studentForForm = STUDENTS.find(s => s.name === formStudent);
+  const studentForForm = students.find(s => s.name === formStudent);
 
   return (
     <div className="p-6 space-y-5">
@@ -1701,7 +1740,7 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent }: {
                         <Badge text={m.type} color="blue" />
                       </div>
                       <p className="text-xs font-medium text-foreground">{m.studentName}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{m.description || "—"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.description || ""}</p>
                       {m.teachers.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {m.teachers.map(t => <span key={t} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground">{t}</span>)}
@@ -1746,9 +1785,9 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent }: {
 
               <div>
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
-                <select value={formStudent} onChange={e => { setFormStudent(e.target.value); const s = STUDENTS.find(st => st.name === e.target.value); setFormTeachers(s?.teachers ?? []); }} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+                <select value={formStudent} onChange={e => { setFormStudent(e.target.value); const s = students.find(st => st.name === e.target.value); setFormTeachers(s?.teachers ?? []); }} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="">Selecione o aluno...</option>
-                  {STUDENTS.map(s => <option key={s.id} value={s.name}>{s.name} — #{s.registration}</option>)}
+                  {students.map(s => <option key={s.id} value={s.name}>{s.name}  #{s.registration}</option>)}
                 </select>
               </div>
 
@@ -1800,11 +1839,12 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent }: {
   );
 }
 
-/// ── SCREEN: Occurrences ────────────────────────────────────────────────────
-function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent }: {
+///  SCREEN: Occurrences 
+function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, students }: {
   occurrences: Occurrence[];
   setOccurrences: React.Dispatch<React.SetStateAction<Occurrence[]>>;
   prefilledStudent?: Student | null;
+  students: Student[];
 }) {
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
@@ -1823,18 +1863,25 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent }: {
     }
   }, [prefilledStudent]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formStudent || !formTitle || !formDesc) return;
+    const subject = formSubject || "No especificado";
+    const savedOccurrence = await apiClient.createOcorrencia({
+      titulo: formTitle,
+      descricao: `Aluno: ${formStudent}\nDisciplina: ${subject}\n${formDesc}`,
+      turma_id: undefined,
+      usuario_id: undefined,
+    });
+
     const occ: Occurrence = {
-      id: Date.now(),
+      id: savedOccurrence.id,
       studentName: formStudent,
-      subject: formSubject || "Não especificado",
+      subject,
       title: formTitle,
       description: formDesc,
-      date: new Date().toLocaleDateString("pt-BR"),
-      author: "Rafael Mendes",
-    };
-    setOccurrences(prev => [occ, ...prev]);
+      date: new Date(`${savedOccurrence.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
+      author: "Sistema",
+    };    setOccurrences(prev => [occ, ...prev]);
     setSaved(true);
     setTimeout(() => { setSaved(false); setShowForm(false); setFormStudent(""); setFormSubject(""); setFormTitle(""); setFormDesc(""); }, 1500);
   };
@@ -1905,7 +1952,7 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent }: {
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
                 <select value={formStudent} onChange={e => setFormStudent(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="">Selecione o aluno...</option>
-                  {STUDENTS.map(s => <option key={s.id} value={s.name}>{s.name} — #{s.registration}</option>)}
+                  {students.map(s => <option key={s.id} value={s.name}>{s.name}  #{s.registration}</option>)}
                 </select>
               </div>
               <div>
@@ -1935,11 +1982,11 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent }: {
   );
 }
 
-// ── SCREEN: Profile ────────────────────────────────────────────────────────
+//  SCREEN: Profile 
 function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState("Rafael Mendes");
-  const [email, setEmail] = useState("rafael.mendes@ifms.edu.br");
+  const [name, setName] = useState("Usurio");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("(67) 9 9234-5678");
   const [role, setRole] = useState("Coordenador NAPNE");
   const [siape, setSiape] = useState("2145678");
@@ -2107,7 +2154,7 @@ function ProfileScreen() {
               <div className="flex items-center gap-2">
                 <Clock size={14} className="text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-muted-foreground">Último Acesso</p>
+                  <p className="text-xs text-muted-foreground">ltimo Acesso</p>
                   <p className="text-sm text-foreground font-medium">{new Date().toLocaleDateString("pt-BR")} às 14:32</p>
                 </div>
               </div>
@@ -2119,7 +2166,7 @@ function ProfileScreen() {
   );
 }
 
-// ── Placeholder screens ────────────────────────────────────────────────────
+//  Placeholder screens 
 function PlaceholderScreen({ label }: { label: string }) {
   return (
     <div className="p-12 flex flex-col items-center justify-center text-center">
@@ -2132,9 +2179,21 @@ function PlaceholderScreen({ label }: { label: string }) {
   );
 }
 
-// ── Root App ────────────────────────────────────────────────────────────────
-export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+//  Root App 
+export default function App({
+  currentUser: loggedInUser,
+  onLogout,
+}: {
+  currentUser: LoggedInUser;
+  onLogout: () => void;
+}) {
+  const currentUser: User = {
+    id: loggedInUser.siape,
+    siape: loggedInUser.siape,
+    name: loggedInUser.name,
+    email: "",
+    role: "Coordenadora",
+  };
   const [activeNav, setActiveNav] = useState<Screen>("overview");
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
@@ -2153,6 +2212,34 @@ export default function App() {
       students: STUDENTS.filter(student => student.teachers.includes(member.name)),
     }))
   );
+
+  useEffect(() => {
+    let active = true;
+
+    const loadBackendData = async () => {
+      try {
+        const [backendStudents, backendMeetings, backendOccurrences] = await Promise.all([
+          apiClient.getAlunos(),
+          apiClient.getReunioes(),
+          apiClient.getOcorrencias(),
+        ]);
+
+        if (!active) return;
+
+        setStudents(backendStudents.map(toStudent));
+        setMeetings(backendMeetings.map(toMeeting));
+        setOccurrences(backendOccurrences.map(toOccurrence));
+      } catch (error) {
+        console.error("Erro ao carregar dados do backend:", error);
+      }
+    };
+
+    loadBackendData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Filtrar estudantes baseado no role do usuário
   const getVisibleStudents = (): Student[] => {
@@ -2210,6 +2297,7 @@ export default function App() {
     setShowLog(false);
     setMeetingPrefilledStudent(null);
     setOccurrencePrefilledStudent(null);
+    onLogout();
   };
 
 
@@ -2238,7 +2326,7 @@ export default function App() {
           <div className="px-6 py-2.5 bg-card border-b border-border flex items-center gap-1.5 text-xs text-muted-foreground">
             <button onClick={() => setSelectedStudent(null)} className="hover:text-foreground transition-colors flex items-center gap-1"><ChevronLeft size={12} /> Alunos</button>
             <ChevronRight size={12} />
-            <span className="text-foreground font-medium">{STUDENTS.find(s => s.id === selectedStudent)?.name}</span>
+            <span className="text-foreground font-medium">{students.find(s => s.id === selectedStudent)?.name}</span>
           </div>
         )}
         {showLog && (
@@ -2250,7 +2338,15 @@ export default function App() {
         )}
 
         <main className="flex-1 overflow-y-auto">
-          {activeNav === "overview" && <OverviewScreen onNav={handleNav} />}
+          {activeNav === "overview" && (
+            <OverviewScreen
+              students={students}
+              meetings={meetings}
+              careLogs={careLogs}
+              occurrences={occurrences}
+              onNav={handleNav}
+            />
+          )}
           {activeNav === "students" && !selectedStudent && <StudentsScreen
               students={students}
               setStudents={setStudents}
@@ -2258,7 +2354,7 @@ export default function App() {
             />}
           {activeNav === "students" && selectedStudent && !showLog && (
             <StudentRecord
-              studentId={selectedStudent}
+              student={students.find((student) => student.id === selectedStudent)!}
               onBack={() => setSelectedStudent(null)}
               onLog={() => setShowLog(true)}
               onScheduleMeeting={handleScheduleMeeting}
@@ -2282,10 +2378,11 @@ export default function App() {
               meetings={meetings}
               setMeetings={setMeetings}
               prefilledStudent={meetingPrefilledStudent}
+              students={students}
             />
           )}
           {activeNav === "occurrences" && (
-            <OccurrencesScreen occurrences={occurrences} setOccurrences={setOccurrences} prefilledStudent={occurrencePrefilledStudent} />
+            <OccurrencesScreen occurrences={occurrences} setOccurrences={setOccurrences} prefilledStudent={occurrencePrefilledStudent} students={students} />
           )}
           {activeNav === "profile" && <ProfileScreen />}
         </main>
@@ -2293,3 +2390,4 @@ export default function App() {
     </div>
   );
 }
+
