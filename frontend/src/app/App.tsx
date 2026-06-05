@@ -3,17 +3,7 @@ import { User, Shield, AlertCircle } from "lucide-react";
 import CoordenadorApp from "./coordenador";
 import AcompanhantesApp from "./acompanhantes";
 
-const USERS = [
-  { siape: "8472910", password: "admin", role: "coordenador", name: "Rafael Mendes" },
-  { siape: "1029384", password: "user", role: "acompanhante", name: "Camila Rocha" },
-  { siape: "2048593", password: "user", role: "acompanhante", name: "Anderson Lima" },
-  { siape: "9384751", password: "user", role: "acompanhante", name: "Juliana Castro" },
-  { siape: "5729481", password: "user", role: "acompanhante", name: "Carlos Mendes" },
-  { siape: "1234567", password: "user", role: "acompanhante", name: "Renata Souza" },
-  { siape: "9876543", password: "user", role: "acompanhante", name: "Roberto Alves" },
-  { siape: "5555555", password: "user", role: "acompanhante", name: "Fernanda Costa" },
-  { siape: "6666666", password: "user", role: "acompanhante", name: "Diego Faria" },
-];
+import { apiClient } from "../services/api";
 
 export interface LoggedInUser {
   siape: string;
@@ -26,7 +16,7 @@ export default function App() {
 
   if (loggedInUser) {
     if (loggedInUser.role === "coordenador") {
-      return <CoordenadorApp />;
+      return <CoordenadorApp currentUser={loggedInUser} onLogout={() => setLoggedInUser(null)} />;
     }
 
     return (
@@ -50,7 +40,7 @@ function LoginScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -60,23 +50,27 @@ function LoginScreen({
     }
 
     setLoading(true);
+    try {
+      const response = await apiClient.login({
+        siape: Number(siape.trim()),
+        senha: pass.trim(),
+      });
 
-    setTimeout(() => {
-      const user = USERS.find((u) => u.siape === siape.trim());
-
-      if (!user || user.password !== pass.trim()) {
-        setLoading(false);
-        setError("SIAPE ou senha inválidos");
+      if (!response.success || !response.data) {
+        setError(response.message || "SIAPE ou senha inv�lidos");
         return;
       }
 
-      setLoading(false);
       onLoginSuccess({
-        siape: user.siape,
-        name: user.name,
-        role: user.role as "coordenador" | "acompanhante",
+        siape: response.data.siape,
+        name: response.data.nome,
+        role: response.data.cargo === "Coordenador" ? "coordenador" : "acompanhante",
       });
-    }, 900);
+    } catch {
+      setError("Não foi possível conectar ao backend");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -160,7 +154,7 @@ function LoginScreen({
                   type="text"
                   value={siape}
                   onChange={(e) => setSiape(e.target.value)}
-                  placeholder="Ex: 1029384"
+                  placeholder="Informe seu SIAPE"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-input-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-accent transition-all"
                 />
               </div>
