@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from scripts import create_initial_admin_script
-from routes import auth_router
+from routes import auth_router, user_routes
 import uvicorn
 
 create_initial_admin_script()
@@ -12,6 +12,7 @@ def read_root():
     return {"message": "Hello, World!"}
 
 app.include_router(auth_router)
+app.include_router(user_routes)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
