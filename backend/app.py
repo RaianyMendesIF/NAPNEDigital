@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from scripts import create_initial_admin_script
-from routes import auth_router, user_routes, responsavel_routes, aluno_routes
+from routes import auth_router, user_routes
 from core.config import APP_HOST, APP_PORT, CORS_ORIGINS
 import uvicorn
 
@@ -15,6 +15,15 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
