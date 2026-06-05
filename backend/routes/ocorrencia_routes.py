@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 
 from core import get_current_user
 from database import get_db
-from schemas import OcorrenciaCreate
+from schemas import OcorrenciaCreate, OcorrenciaUpdate
 from services import (
     create_ocorrencia_service,
     list_ocorrencias_service,
     get_ocorrencia_service,
+    update_ocorrencia_service,
 )
 
 router = APIRouter(prefix="/ocorrencias", tags=["ocorrencias"])
@@ -46,3 +47,13 @@ def get_ocorrencia(
     current_user=Depends(get_current_user),
 ):
     return get_ocorrencia_service(ocorrencia_id, current_user, db)
+
+
+@router.patch("/{ocorrencia_id}")
+def update_ocorrencia(
+    ocorrencia_id: int,
+    data: OcorrenciaUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return update_ocorrencia_service(ocorrencia_id, data, current_user, db)

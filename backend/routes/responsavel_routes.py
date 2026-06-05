@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from core import require_admin, get_current_user
+from core import require_admin, require_gestor, get_current_user
 from database import get_db
 from schemas import ResponsavelCreate, ResponsavelUpdate
 from services import (
@@ -19,17 +19,18 @@ router = APIRouter(prefix="/responsaveis", tags=["responsaveis"])
 def create_responsavel(
     data: ResponsavelCreate,
     db: Session = Depends(get_db),
-    _admin=Depends(require_admin),
+    _gestor=Depends(require_gestor),
 ):
     return create_responsavel_service(data, db)
 
 
 @router.get("")
 def get_responsaveis(
+    busca: str | None = None,
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ):
-    return list_responsaveis_service(db)
+    return list_responsaveis_service(db, busca=busca)
 
 
 @router.get("/{responsavel_id}")
@@ -46,7 +47,7 @@ def update_responsavel(
     responsavel_id: int,
     data: ResponsavelUpdate,
     db: Session = Depends(get_db),
-    _admin=Depends(require_admin),
+    _gestor=Depends(require_gestor),
 ):
     return update_responsavel_service(responsavel_id, data, db)
 

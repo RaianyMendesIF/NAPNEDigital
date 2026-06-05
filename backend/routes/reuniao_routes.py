@@ -3,8 +3,13 @@ from sqlalchemy.orm import Session
 
 from core import require_admin, get_current_user
 from database import get_db
-from schemas import ReuniaoCreate
-from services import create_reuniao_service, list_reunioes_service, get_reuniao_service
+from schemas import ReuniaoCreate, ReuniaoUpdate
+from services import (
+    create_reuniao_service,
+    update_reuniao_service,
+    list_reunioes_service,
+    get_reuniao_service,
+)
 
 router = APIRouter(prefix="/reunioes", tags=["reunioes"])
 
@@ -42,3 +47,13 @@ def get_reuniao(
     current_user=Depends(get_current_user),
 ):
     return get_reuniao_service(reuniao_id, current_user, db)
+
+
+@router.patch("/{reuniao_id}")
+def update_reuniao(
+    reuniao_id: int,
+    data: ReuniaoUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    return update_reuniao_service(reuniao_id, data, db)

@@ -9,6 +9,8 @@ from .dependencies import (
     require_atendimento_permission,
     require_professor_in_turma,
     usuario_tem_acesso_turma,
+    usuario_pode_registrar_em_turma,
+    ids_alunos_visiveis_usuario,
     usuario_pode_ver_prontuario,
     apply_prontuario_permissions,
 )
@@ -26,6 +28,8 @@ __all__ = [
     "require_atendimento_permission",
     "require_professor_in_turma",
     "usuario_tem_acesso_turma",
+    "usuario_pode_registrar_em_turma",
+    "ids_alunos_visiveis_usuario",
     "usuario_pode_ver_prontuario",
     "apply_prontuario_permissions",
 ]

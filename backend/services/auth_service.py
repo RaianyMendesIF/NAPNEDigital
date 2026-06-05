@@ -13,7 +13,7 @@ def login_service(user_data: authRequest, db: Session):
         return error_message("Siape ou senha inválidos", 404)
 
     if user.status == StatusUsuario.INATIVO:
-        return error_message("Usuário inativo", 403)
+        return error_message("Conta desativada. Contate o coordenador.", 403)
 
     is_password_valid = verify_password(user_data.senha, user.senha)
     if not is_password_valid:

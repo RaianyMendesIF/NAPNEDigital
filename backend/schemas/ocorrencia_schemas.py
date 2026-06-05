@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class OcorrenciaCreate(BaseModel):
     turma_id: int
+    titulo: str | None = Field(default=None, min_length=3)
     descricao: str = Field(min_length=3)
 
 

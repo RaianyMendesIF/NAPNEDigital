@@ -6,6 +6,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from core.storage import DOCUMENTOS_DIR, ensure_upload_dirs
+from core.dependencies import usuario_pode_ver_prontuario
 from models import Aluno, Documentacao, StatusAluno, Usuario
 from utils import error_message, success_message
 
@@ -76,4 +77,21 @@ async def upload_documento(
     return success_message(
         data=_documentacao_data(documento),
         message="Documento enviado com sucesso",
+    )
+
+
+def list_documentacoes_service(
+    db: Session,
+    usuario: Usuario,
+    aluno_id: int,
+):
+    if not usuario_pode_ver_prontuario(usuario, aluno_id, db):
+        return error_message("Sem permissão para visualizar documentos deste aluno", 403)
+
+    query = db.query(Documentacao).filter(Documentacao.aluno_id == aluno_id)
+
+    documentos = query.order_by(Documentacao.data_criacao.desc()).all()
+    return success_message(
+        data=[_documentacao_data(d) for d in documentos],
+        message="Documentações listadas com sucesso",
     )

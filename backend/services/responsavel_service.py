@@ -1,3 +1,4 @@
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from models import Responsavel, Aluno
@@ -29,8 +30,18 @@ def create_responsavel_service(data: ResponsavelCreate, db: Session):
     )
 
 
-def list_responsaveis_service(db: Session):
-    responsaveis = db.query(Responsavel).order_by(Responsavel.nome).all()
+def list_responsaveis_service(db: Session, busca: str | None = None):
+    query = db.query(Responsavel)
+    if busca:
+        termo = f"%{busca.strip()}%"
+        query = query.filter(
+            or_(
+                Responsavel.nome.ilike(termo),
+                Responsavel.email.ilike(termo),
+                Responsavel.telefone.ilike(termo),
+            )
+        )
+    responsaveis = query.order_by(Responsavel.nome).all()
     return success_message(
         data=[_responsavel_data(r) for r in responsaveis],
         message="Responsáveis listados com sucesso",

@@ -11,7 +11,7 @@ from models import (
     Usuario,
 )
 from schemas import OcorrenciaCreate, OcorrenciaUpdate
-from core.dependencies import usuario_tem_acesso_turma
+from core.dependencies import usuario_pode_registrar_em_turma, usuario_tem_acesso_turma
 from utils import error_message, success_message
 
 
@@ -54,13 +54,19 @@ def create_ocorrencia_service(
     if not turma:
         return error_message("Turma não encontrada", 404)
 
-    if not usuario_tem_acesso_turma(usuario, data.turma_id, db):
-        return error_message("Sem acesso a esta turma", 403)
+    if not usuario_pode_registrar_em_turma(usuario, data.turma_id, db):
+        return error_message("Sem permissão para registrar ocorrência nesta turma", 403)
+
+    titulo = (
+        data.titulo.strip()
+        if data.titulo
+        else _titulo_from_descricao(data.descricao)
+    )
 
     ocorrencia = Ocorrencia(
         turma_id=data.turma_id,
         usuario_id=usuario.id,
-        titulo=_titulo_from_descricao(data.descricao),
+        titulo=titulo,
         descricao=data.descricao,
     )
     db.add(ocorrencia)
@@ -143,8 +149,8 @@ def update_ocorrencia_service(
     if not ocorrencia:
         return error_message("Ocorrência não encontrada", 404)
 
-    if not usuario_tem_acesso_turma(usuario, ocorrencia.turma_id, db):
-        return error_message("Sem acesso a esta ocorrência", 403)
+    if not usuario_pode_registrar_em_turma(usuario, ocorrencia.turma_id, db):
+        return error_message("Sem permissão para editar esta ocorrência", 403)
 
     updates = data.model_dump(exclude_unset=True)
     for field, value in updates.items():

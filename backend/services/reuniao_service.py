@@ -19,6 +19,13 @@ DEFAULT_INICIO = time(9, 0)
 DEFAULT_FIM = time(10, 0)
 
 
+def _parse_horario(value: str | None, default: time) -> time:
+    if not value:
+        return default
+    hora, minuto = value.split(":")
+    return time(int(hora), int(minuto))
+
+
 def _reuniao_data(reuniao: Reuniao, db: Session) -> dict:
     turma = db.query(Turma).filter(Turma.id == reuniao.turma_id).first()
     status = reuniao.status.value if hasattr(reuniao.status, "value") else reuniao.status
@@ -46,8 +53,8 @@ def create_reuniao_service(data: ReuniaoCreate, usuario: Usuario, db: Session):
         tipo=data.titulo,
         descricao=data.descricao,
         data=data.data_reuniao,
-        horario_inicio=DEFAULT_INICIO,
-        horario_fim=DEFAULT_FIM,
+        horario_inicio=_parse_horario(data.horario_inicio, DEFAULT_INICIO),
+        horario_fim=_parse_horario(data.horario_fim, DEFAULT_FIM),
         status=StatusReuniao.AGENDADA,
         usuario_id=usuario.id,
     )
@@ -70,6 +77,14 @@ def update_reuniao_service(reuniao_id: int, data: ReuniaoUpdate, db: Session):
         updates["tipo"] = updates.pop("titulo")
     if "data_reuniao" in updates:
         updates["data"] = updates.pop("data_reuniao")
+    if "horario_inicio" in updates:
+        updates["horario_inicio"] = _parse_horario(
+            updates.pop("horario_inicio"), reuniao.horario_inicio
+        )
+    if "horario_fim" in updates:
+        updates["horario_fim"] = _parse_horario(
+            updates.pop("horario_fim"), reuniao.horario_fim
+        )
     if "status" in updates:
         try:
             updates["status"] = StatusReuniao(updates["status"])

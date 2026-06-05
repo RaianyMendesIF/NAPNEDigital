@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from schemas import UserCreate
-from models import Usuario, StatusUsuario
+from models import Usuario, StatusUsuario, Cargo
 from utils import error_message, success_message
 from core import hash_password
 
@@ -44,6 +44,19 @@ def create_user_service(user_data: UserCreate, db: Session):
     )
 
 
+def list_users_service(db: Session, cargo: str | None = None, apenas_ativos: bool = True):
+    query = db.query(Usuario)
+    if cargo is not None:
+        query = query.filter(Usuario.cargo == cargo)
+    if apenas_ativos:
+        query = query.filter(Usuario.status == StatusUsuario.ATIVO)
+    usuarios = query.order_by(Usuario.nome).all()
+    return success_message(
+        data=[_user_data(u) for u in usuarios],
+        message="Usuários listados com sucesso",
+    )
+
+
 def deactivate_user_service(user_id: int, db: Session):
     user = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not user:
@@ -51,6 +64,21 @@ def deactivate_user_service(user_id: int, db: Session):
 
     if user.status == StatusUsuario.INATIVO:
         return error_message("Usuário já está inativo", 400)
+
+    if user.cargo == Cargo.COORDENADOR:
+        coordenadores_ativos = (
+            db.query(Usuario)
+            .filter(
+                Usuario.cargo == Cargo.COORDENADOR,
+                Usuario.status == StatusUsuario.ATIVO,
+            )
+            .count()
+        )
+        if coordenadores_ativos <= 1:
+            return error_message(
+                "Não é possível desativar o único coordenador ativo do sistema",
+                400,
+            )
 
     user.status = StatusUsuario.INATIVO
     db.commit()

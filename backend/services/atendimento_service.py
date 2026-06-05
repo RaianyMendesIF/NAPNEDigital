@@ -31,7 +31,7 @@ def create_atendimento_service(
     atendimento = Atendimento(
         aluno_id=data.aluno_id,
         usuario_id=usuario.id,
-        tipo="Atendimento",
+        tipo=data.tipo,
         descricao=data.descricao,
         data_solicitacao=data.data_atendimento or date.today(),
     )

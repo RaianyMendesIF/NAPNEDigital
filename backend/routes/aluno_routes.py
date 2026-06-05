@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from core import require_admin, get_current_user, apply_prontuario_permissions
+from core import require_admin, require_gestor, get_current_user, apply_prontuario_permissions
 from database import get_db
 from schemas import AlunoCreate, AlunoUpdate
 from services import (
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/alunos", tags=["alunos"])
 def create_aluno(
     data: AlunoCreate,
     db: Session = Depends(get_db),
-    _admin=Depends(require_admin),
+    _gestor=Depends(require_gestor),
 ):
     return create_aluno_service(data, db)
 
@@ -28,10 +28,16 @@ def create_aluno(
 @router.get("")
 def get_alunos(
     apenas_ativos: bool = Query(default=False),
+    busca: str | None = Query(default=None),
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    return list_alunos_service(db, apenas_ativos=apenas_ativos)
+    return list_alunos_service(
+        db,
+        usuario=current_user,
+        apenas_ativos=apenas_ativos,
+        busca=busca,
+    )
 
 
 @router.get("/{aluno_id}/prontuario")
@@ -47,9 +53,9 @@ def get_prontuario(
 def get_aluno(
     aluno_id: int,
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    return get_aluno_service(aluno_id, db)
+    return get_aluno_service(aluno_id, db, usuario=current_user)
 
 
 @router.put("/{aluno_id}")
@@ -57,7 +63,7 @@ def update_aluno(
     aluno_id: int,
     data: AlunoUpdate,
     db: Session = Depends(get_db),
-    _admin=Depends(require_admin),
+    _gestor=Depends(require_gestor),
 ):
     return update_aluno_service(aluno_id, data, db)
 
