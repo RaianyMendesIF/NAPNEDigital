@@ -1,7 +1,7 @@
 from fastapi.security import OAuth2PasswordBearer
 from core import verify_token
 from fastapi import Depends, HTTPException
-from models import Usuario
+from models import Usuario, StatusUsuario
 from database import get_db
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(Usuario).filter(Usuario.id == int(user_id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    if user.status == StatusUsuario.INATIVO:
+        raise HTTPException(status_code=403, detail="Usuário inativo")
 
     return user
 
