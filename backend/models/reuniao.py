@@ -7,6 +7,7 @@ class StatusReuniao(str, enum.Enum):
     AGENDADA = "Agendada"
     REALIZADA = "Realizada"
     PENDENTE = "Pendente"
+    CANCELADA = "Cancelada"
 
 class Reuniao(Base):
     __tablename__ = "reunioes"

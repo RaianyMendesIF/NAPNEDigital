@@ -15,6 +15,7 @@ class SolicitacaoUpdate(BaseModel):
 
 class SolicitacaoStatusUpdate(BaseModel):
     status: Literal["DEFERIDO", "INDEFERIDO"]
+    motivo: str | None = Field(default=None, min_length=3)
 
 
 class SolicitacaoResponse(BaseModel):

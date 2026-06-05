@@ -1,6 +1,8 @@
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from models import Aluno, Responsavel, StatusAluno
+from core.dependencies import ids_alunos_visiveis_usuario
+from models import Aluno, Responsavel, StatusAluno, Usuario
 from schemas import AlunoCreate, AlunoUpdate
 from utils import error_message, success_message
 
@@ -71,10 +73,32 @@ def create_aluno_service(data: AlunoCreate, db: Session):
     )
 
 
-def list_alunos_service(db: Session, apenas_ativos: bool = False):
+def list_alunos_service(
+    db: Session,
+    usuario: Usuario | None = None,
+    apenas_ativos: bool = False,
+    busca: str | None = None,
+):
     query = db.query(Aluno)
+
+    if usuario is not None:
+        ids_visiveis = ids_alunos_visiveis_usuario(usuario, db)
+        if ids_visiveis is not None:
+            if not ids_visiveis:
+                return success_message(data=[], message="Alunos listados com sucesso")
+            query = query.filter(Aluno.id.in_(ids_visiveis))
+
     if apenas_ativos:
         query = query.filter(Aluno.status == StatusAluno.ATIVO)
+    if busca:
+        termo = f"%{busca.strip()}%"
+        query = query.filter(
+            or_(
+                Aluno.nome.ilike(termo),
+                Aluno.cpf.ilike(termo),
+                Aluno.matricula.ilike(termo),
+            )
+        )
     alunos = query.order_by(Aluno.nome).all()
     return success_message(
         data=[_aluno_data(a) for a in alunos],
@@ -82,10 +106,15 @@ def list_alunos_service(db: Session, apenas_ativos: bool = False):
     )
 
 
-def get_aluno_service(aluno_id: int, db: Session):
+def get_aluno_service(aluno_id: int, db: Session, usuario: Usuario | None = None):
     aluno = db.query(Aluno).filter(Aluno.id == aluno_id).first()
     if not aluno:
         return error_message("Aluno não encontrado", 404)
+
+    if usuario is not None:
+        ids_visiveis = ids_alunos_visiveis_usuario(usuario, db)
+        if ids_visiveis is not None and aluno_id not in ids_visiveis:
+            return error_message("Sem permissão para visualizar este aluno", 403)
     return success_message(
         data=_aluno_data(aluno),
         message="Aluno encontrado",

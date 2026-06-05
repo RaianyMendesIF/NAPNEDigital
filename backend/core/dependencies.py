@@ -23,7 +23,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     if user.status == StatusUsuario.INATIVO:
-        raise HTTPException(status_code=403, detail="Usuário inativo")
+        raise HTTPException(
+            status_code=403,
+            detail="Conta desativada. Contate o coordenador.",
+        )
 
     return user
 
@@ -53,6 +56,45 @@ def require_atendimento_permission(
     if current_user.cargo not in (Cargo.COORDENADOR, Cargo.PSICOLOGO):
         raise HTTPException(status_code=403, detail="Usuário não autorizado")
     return current_user
+
+
+def usuario_pode_registrar_em_turma(usuario: Usuario, turma_id: int, db: Session) -> bool:
+    if usuario.cargo == Cargo.COORDENADOR:
+        return True
+
+    if usuario.cargo != Cargo.PROFESSOR:
+        return False
+
+    vinculo = (
+        db.query(ProfessorTurma)
+        .filter(
+            ProfessorTurma.turma_id == turma_id,
+            ProfessorTurma.usuario_id == usuario.id,
+            ProfessorTurma.status == StatusProfessorTurma.ATIVO,
+        )
+        .first()
+    )
+    return vinculo is not None
+
+
+def ids_alunos_visiveis_usuario(usuario: Usuario, db: Session) -> list[int] | None:
+    if usuario.cargo in (Cargo.COORDENADOR, Cargo.AGENTE, Cargo.PSICOLOGO):
+        return None
+
+    if usuario.cargo == Cargo.PROFESSOR:
+        rows = (
+            db.query(Turma.aluno_id)
+            .join(ProfessorTurma, ProfessorTurma.turma_id == Turma.id)
+            .filter(
+                ProfessorTurma.usuario_id == usuario.id,
+                ProfessorTurma.status == StatusProfessorTurma.ATIVO,
+            )
+            .distinct()
+            .all()
+        )
+        return [row[0] for row in rows]
+
+    return []
 
 
 def usuario_tem_acesso_turma(usuario: Usuario, turma_id: int, db: Session) -> bool:
