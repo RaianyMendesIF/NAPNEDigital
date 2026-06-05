@@ -12,6 +12,17 @@ from .turma_schemas import (
     TurmaResponse,
     ProfessorTurmaResponse,
 )
+from .documentacao_schemas import DocumentacaoResponse
+from .atendimento_schemas import (
+    AtendimentoCreate,
+    AtendimentoUpdate,
+    AtendimentoResponse,
+)
+from .ocorrencia_schemas import (
+    OcorrenciaCreate,
+    OcorrenciaUpdate,
+    OcorrenciaResponse,
+)
 
 __all__ = [
     "authRequest",
@@ -28,4 +39,11 @@ __all__ = [
     "ProfessorTurmaCreate",
     "TurmaResponse",
     "ProfessorTurmaResponse",
+    "DocumentacaoResponse",
+    "AtendimentoCreate",
+    "AtendimentoUpdate",
+    "AtendimentoResponse",
+    "OcorrenciaCreate",
+    "OcorrenciaUpdate",
+    "OcorrenciaResponse",
 ]

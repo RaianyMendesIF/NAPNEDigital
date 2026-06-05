@@ -12,6 +12,8 @@ class Documentacao(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     nome = Column(String)
+    tipo_documento = Column(String, nullable=False)
+    caminho_arquivo = Column(String, nullable=False)
     ano_letivo = Column(Integer, nullable=False)
     semestre = Column(Integer, nullable=False)
     data_criacao = Column(Date, default=datetime.now)

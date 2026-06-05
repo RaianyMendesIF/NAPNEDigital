@@ -1,26 +1,25 @@
-from pydantic import BaseModel
-from typing import Optional
 from datetime import date
 
+from pydantic import BaseModel, Field
+
+
 class OcorrenciaCreate(BaseModel):
-    titulo: str
-    descricao: str
-    turma_id: Optional[int] = None
-    usuario_id: Optional[int] = None
+    turma_id: int
+    descricao: str = Field(min_length=3)
+
 
 class OcorrenciaUpdate(BaseModel):
-    titulo: Optional[str] = None
-    descricao: Optional[str] = None
-    turma_id: Optional[int] = None
-    usuario_id: Optional[int] = None
+    descricao: str | None = Field(default=None, min_length=3)
+    titulo: str | None = Field(default=None, min_length=3)
+
 
 class OcorrenciaResponse(BaseModel):
     id: int
+    turma_id: int
+    aluno_id: int | None
+    semestre: str
+    ano_letivo: int
+    usuario_id: int
     titulo: str
     descricao: str
     data_registro: date
-    turma_id: Optional[int]
-    usuario_id: Optional[int]
-
-    class Config:
-        from_attributes = True

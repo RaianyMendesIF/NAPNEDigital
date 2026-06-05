@@ -21,6 +21,19 @@ from .turma_service import (
     vincular_professor_service,
     list_professores_turma_service,
 )
+from .documentacao_service import upload_documento
+from .atendimento_service import (
+    create_atendimento_service,
+    list_atendimentos_service,
+    get_atendimento_service,
+    update_atendimento_service,
+)
+from .ocorrencia_service import (
+    create_ocorrencia_service,
+    list_ocorrencias_service,
+    get_ocorrencia_service,
+    update_ocorrencia_service,
+)
 
 __all__ = [
     "login_service",
@@ -41,4 +54,13 @@ __all__ = [
     "get_turma_service",
     "vincular_professor_service",
     "list_professores_turma_service",
+    "upload_documento",
+    "create_atendimento_service",
+    "list_atendimentos_service",
+    "get_atendimento_service",
+    "update_atendimento_service",
+    "create_ocorrencia_service",
+    "list_ocorrencias_service",
+    "get_ocorrencia_service",
+    "update_ocorrencia_service",
 ]
