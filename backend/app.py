@@ -1,18 +1,31 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from scripts import create_initial_admin_script
 from routes import auth_router, user_routes
+from core.config import APP_HOST, APP_PORT, CORS_ORIGINS
 import uvicorn
 
 create_initial_admin_script()
 
-app = FastAPI()
+app = FastAPI(
+    title="NAPNE Digital API",
+    version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
-    return {"message": "Hello, World!"}
+    return {"message": "Hello, World!", "docs": "/docs"}
 
 app.include_router(auth_router)
 app.include_router(user_routes)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=APP_HOST, port=APP_PORT)
