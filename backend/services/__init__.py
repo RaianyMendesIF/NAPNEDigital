@@ -14,6 +14,13 @@ from .aluno_service import (
     update_aluno_service,
     deactivate_aluno_service,
 )
+from .turma_service import (
+    create_turma_service,
+    list_turmas_service,
+    get_turma_service,
+    vincular_professor_service,
+    list_professores_turma_service,
+)
 
 __all__ = [
     "login_service",
@@ -29,4 +36,9 @@ __all__ = [
     "get_aluno_service",
     "update_aluno_service",
     "deactivate_aluno_service",
+    "create_turma_service",
+    "list_turmas_service",
+    "get_turma_service",
+    "vincular_professor_service",
+    "list_professores_turma_service",
 ]
