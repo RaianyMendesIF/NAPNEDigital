@@ -6,6 +6,12 @@ from .responsavel_schemas import (
     ResponsavelResponse,
 )
 from .aluno_schemas import AlunoCreate, AlunoUpdate, AlunoResponse
+from .turma_schemas import (
+    TurmaCreate,
+    ProfessorTurmaCreate,
+    TurmaResponse,
+    ProfessorTurmaResponse,
+)
 
 __all__ = [
     "authRequest",
@@ -18,4 +24,8 @@ __all__ = [
     "AlunoCreate",
     "AlunoUpdate",
     "AlunoResponse",
+    "TurmaCreate",
+    "ProfessorTurmaCreate",
+    "TurmaResponse",
+    "ProfessorTurmaResponse",
 ]
