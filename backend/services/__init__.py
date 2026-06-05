@@ -46,6 +46,7 @@ from .reuniao_service import (
     list_reunioes_service,
     get_reuniao_service,
 )
+from .prontuario_service import get_prontuario_aluno
 
 __all__ = [
     "login_service",
@@ -83,4 +84,5 @@ __all__ = [
     "update_reuniao_service",
     "list_reunioes_service",
     "get_reuniao_service",
+    "get_prontuario_aluno",
 ]

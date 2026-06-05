@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from core import require_admin, get_current_user
+from core import require_admin, get_current_user, apply_prontuario_permissions
 from database import get_db
 from schemas import AlunoCreate, AlunoUpdate
 from services import (
@@ -10,6 +10,7 @@ from services import (
     get_aluno_service,
     update_aluno_service,
     deactivate_aluno_service,
+    get_prontuario_aluno,
 )
 
 router = APIRouter(prefix="/alunos", tags=["alunos"])
@@ -31,6 +32,15 @@ def get_alunos(
     _user=Depends(get_current_user),
 ):
     return list_alunos_service(db, apenas_ativos=apenas_ativos)
+
+
+@router.get("/{aluno_id}/prontuario")
+def get_prontuario(
+    aluno_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(apply_prontuario_permissions),
+):
+    return get_prontuario_aluno(aluno_id, current_user, db)
 
 
 @router.get("/{aluno_id}")

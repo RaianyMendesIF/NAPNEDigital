@@ -2,8 +2,17 @@ from datetime import time
 
 from sqlalchemy.orm import Session
 
-from models import Reuniao, StatusReuniao, Turma, Usuario
+from models import (
+    Cargo,
+    ProfessorTurma,
+    Reuniao,
+    StatusProfessorTurma,
+    StatusReuniao,
+    Turma,
+    Usuario,
+)
 from schemas import ReuniaoCreate, ReuniaoUpdate
+from core.dependencies import usuario_tem_acesso_turma
 from utils import error_message, success_message
 
 DEFAULT_INICIO = time(9, 0)
@@ -78,10 +87,47 @@ def update_reuniao_service(reuniao_id: int, data: ReuniaoUpdate, db: Session):
     )
 
 
-def list_reunioes_service(db: Session, turma_id: int | None = None):
-    query = db.query(Reuniao)
+def _turmas_visiveis(usuario: Usuario, db: Session) -> list[int] | None:
+    if usuario.cargo in (Cargo.COORDENADOR, Cargo.AGENTE, Cargo.PSICOLOGO):
+        return None
+
+    if usuario.cargo == Cargo.PROFESSOR:
+        rows = (
+            db.query(ProfessorTurma.turma_id)
+            .filter(
+                ProfessorTurma.usuario_id == usuario.id,
+                ProfessorTurma.status == StatusProfessorTurma.ATIVO,
+            )
+            .distinct()
+            .all()
+        )
+        return [row[0] for row in rows]
+
+    return []
+
+
+def list_reunioes_service(
+    db: Session,
+    usuario: Usuario,
+    turma_id: int | None = None,
+    semestre: str | None = None,
+    ano_letivo: int | None = None,
+):
+    query = db.query(Reuniao).join(Turma, Reuniao.turma_id == Turma.id)
+
+    turmas_permitidas = _turmas_visiveis(usuario, db)
+    if turmas_permitidas is not None:
+        if not turmas_permitidas:
+            return success_message(data=[], message="Reuniões listadas com sucesso")
+        query = query.filter(Reuniao.turma_id.in_(turmas_permitidas))
+
     if turma_id is not None:
         query = query.filter(Reuniao.turma_id == turma_id)
+    if semestre is not None:
+        query = query.filter(Turma.semestre == semestre)
+    if ano_letivo is not None:
+        query = query.filter(Turma.ano_letivo == ano_letivo)
+
     reunioes = query.order_by(Reuniao.data.desc()).all()
     return success_message(
         data=[_reuniao_data(r, db) for r in reunioes],
@@ -89,10 +135,14 @@ def list_reunioes_service(db: Session, turma_id: int | None = None):
     )
 
 
-def get_reuniao_service(reuniao_id: int, db: Session):
+def get_reuniao_service(reuniao_id: int, usuario: Usuario, db: Session):
     reuniao = db.query(Reuniao).filter(Reuniao.id == reuniao_id).first()
     if not reuniao:
         return error_message("Reunião não encontrada", 404)
+
+    if not usuario_tem_acesso_turma(usuario, reuniao.turma_id, db):
+        return error_message("Sem acesso a esta reunião", 403)
+
     return success_message(
         data=_reuniao_data(reuniao, db),
         message="Reunião encontrada",
