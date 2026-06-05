@@ -8,21 +8,15 @@ def create_initial_admin_script():
 
     admin_exists = db.query(Usuario).filter(Usuario.cargo == "Coordenador").first()
     if admin_exists:
-        admin_exists.siape = "12345678"
-        admin_exists.nome = "Eva Maria Testa Teles"
-        admin_exists.email = "eva.teles@ifms.edu.br"
-        admin_exists.status = "Ativo"
-        db.commit()
-        db.close()
         return
 
     password = "mudar123"
     hash_pass = hash_password(password)
     
     coordenador = Usuario(
-        siape="12345678",
-        nome="Eva Maria Testa Teles",
-        email="eva.teles@ifms.edu.br",
+        siape="1234567",
+        nome="Coordenador SINAPNE",
+        email="coordenador@example.com",
         senha=hash_pass,
         cargo="Coordenador",
         status="Ativo"

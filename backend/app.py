@@ -5,7 +5,6 @@ from routes import auth_router
 from routes.alunos import router as alunos_router
 from routes.reunioes import router as reunioes_router
 from routes.ocorrencias import router as ocorrencias_router
-from routes.usuarios import router as usuarios_router
 import uvicorn
 
 create_initial_admin_script()
@@ -29,7 +28,6 @@ app.include_router(auth_router)
 app.include_router(alunos_router)
 app.include_router(reunioes_router)
 app.include_router(ocorrencias_router)
-app.include_router(usuarios_router)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

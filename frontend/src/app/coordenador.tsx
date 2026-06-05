@@ -19,7 +19,7 @@ import type {
 
 type Screen = "overview" | "students" | "servers" | "record" | "log" | "meetings" | "occurrences" | "profile";
 type UserRole = "Acompanhadora" | "Coordenadora" | "Admin";
-type MeetingStatus = "Agendada" | "ConcluÃ­da" | "Pendente";
+type MeetingStatus = "Agendada" | "Concluída" | "Pendente";
 
 interface User {
   id: string;
@@ -40,14 +40,14 @@ interface Student {
   status: "Ativo" | "Acompanhamento" | "Inativo";
   alert?: boolean;
   teachers: string[];
-  lastCareDate?: string; // Data do Ãºltimo atendimento
-  editable?: boolean; // Flag para controle de ediÃ§Ã£o
+  lastCareDate?: string; // Data do último atendimento
+  editable?: boolean; // Flag para controle de edição
 }
 
 interface StaffMember {
   id: string;
   name: string;
-  role: 'Professor' | 'Psicólogo' | 'Agente' | 'Coordenador';
+  role: 'Professor' | 'Psiclogo' | 'Agente' | 'Coordenador';
   email: string;
   siape: string;
   students?: Student[];
@@ -62,7 +62,7 @@ interface MeetingEvent {
   teachers: string[];
   type: string;
   status?: MeetingStatus; // Novo campo para status
-  completedAt?: string; // Data/hora de conclusÃ£o
+  completedAt?: string; // Data/hora de conclusão
   completedBy?: string; // Quem completou
 }
 
@@ -89,14 +89,14 @@ interface CareLog {
 interface ClassHistory {
   id: string;
   course: string;
-  gradeYear: string;   // Ex: "2Âº Ano" ou "3Âº Semestre"
+  gradeYear: string;   // Ex: "2 Ano" ou "3 Semestre"
   schoolYear: number;  // Ex: 2026
   semester: number;    // Ex: 1 ou 2
-  status: 'Ativo' | 'Acompanhamento' | 'ConcluÃ­do' | 'Evadido' | 'Trancado';
+  status: 'Ativo' | 'Acompanhamento' | 'Concludo' | 'Evadido' | 'Trancado';
   teachers: string[];  // Nomes dos professores vinculados neste semestre
 }
 
-// â”€â”€ Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 const STUDENTS: Student[] = [];
 const INITIAL_TIMELINE_EVENTS: CareLog[] = [];
 const TIMELINE_EVENTS: CareLog[] = [];
@@ -108,7 +108,7 @@ const INITIAL_HISTORY: ClassHistory[] = [];
 const USERS: User[] = [];
 const ACOMPANHADORA_STUDENTS: Record<string, string[]> = {};
 
-// FunÃ§Ã£o utilitÃ¡ria para calcular dias desde Ãºltima data
+// Função utilitária para calcular dias desde última data
 const calculateDaysSince = (dateString?: string): number => {
   if (!dateString) return -1;
   const today = new Date();
@@ -122,8 +122,8 @@ const needColorFor = (need: string) => {
   const colors: Record<string, string> = {
     TEA: "blue",
     TDAH: "amber",
-    "DeficiÃªncia Visual": "purple",
-    "DeficiÃªncia Auditiva": "indigo",
+    "Deficiência Visual": "purple",
+    "Deficiência Auditiva": "indigo",
     "Altas Habilidades": "teal",
     Dislexia: "rose",
   };
@@ -155,14 +155,14 @@ const toMeeting = (reuniao: BackendReuniao): MeetingEvent => {
     id: reuniao.id,
     studentName: studentLine.startsWith("Aluno: ")
       ? studentLine.replace("Aluno: ", "").trim()
-      : "Aluno nÃ£o informado",
+      : "Aluno não informado",
     date: reuniao.data,
     time: reuniao.horario_inicio.slice(0, 5),
     description: descriptionLines.join("\n").trim(),
     teachers: [],
     type: reuniao.tipo,
     status:
-      reuniao.status === "ConcluÃ­da" || reuniao.status === "Pendente"
+      reuniao.status === "Concluída" || reuniao.status === "Pendente"
         ? reuniao.status
         : "Agendada",
   };
@@ -175,10 +175,10 @@ const toOccurrence = (ocorrencia: BackendOcorrencia): Occurrence => {
     id: ocorrencia.id,
     studentName: studentLine?.startsWith("Aluno: ")
       ? studentLine.replace("Aluno: ", "").trim()
-      : "Aluno nÃ£o informado",
+      : "Aluno não informado",
     subject: subjectLine?.startsWith("Disciplina: ")
       ? subjectLine.replace("Disciplina: ", "").trim()
-      : "NÃ£o especificado",
+      : "Não especificado",
     title: ocorrencia.titulo,
     description: descriptionLines.join("\n").trim() || ocorrencia.descricao,
     date: new Date(`${ocorrencia.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
@@ -190,8 +190,8 @@ const toStaffMember = (usuario: BackendUsuario): StaffMember => ({
   id: String(usuario.id),
   name: usuario.nome,
   role:
-    usuario.cargo === "Psicólogo"
-      ? "Psicólogo"
+    usuario.cargo === "Psiclogo"
+      ? "Psiclogo"
       : usuario.cargo === "Agente"
         ? "Agente"
         : usuario.cargo === "Coordenador"
@@ -203,7 +203,7 @@ const toStaffMember = (usuario: BackendUsuario): StaffMember => ({
 });
 
 
-// â”€â”€ Utility components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  Utility components 
 const Badge = ({ text, color }: { text: string; color: string }) => {
   const map: Record<string, string> = {
     blue: "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
@@ -262,14 +262,14 @@ const KpiCard = ({
   </button>
 );
 
-// â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  Sidebar 
 const NAV_ITEMS = [
-  { id: "overview", label: "VisÃ£o Geral", icon: LayoutDashboard },
+  { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
   { id: "students", label: "Alunos", icon: Users },
   { id: "servers", label: "Corpo Docente", icon: Users },
   { id: "log", label: "Atendimentos", icon: Activity },
-  { id: "meetings", label: "ReuniÃµes", icon: CalendarDays },
-  { id: "occurrences", label: "OcorrÃªncias", icon: AlertTriangle },
+  { id: "meetings", label: "Reuniões", icon: CalendarDays },
+  { id: "occurrences", label: "Ocorrências", icon: AlertTriangle },
 ];
 
 function Sidebar({
@@ -293,7 +293,7 @@ function Sidebar({
           </div>
           <div>
             <p className="text-white font-bold text-sm leading-tight" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>NAPNE Digital</p>
-            <p className="text-[10px] leading-tight" style={{ color: "var(--sidebar-foreground)" }}>IFMS Â· Campus TrÃªs Lagoas</p>
+            <p className="text-[10px] leading-tight" style={{ color: "var(--sidebar-foreground)" }}>IFMS · Campus Três Lagoas</p>
           </div>
         </div>
       </div>
@@ -324,7 +324,7 @@ function Sidebar({
             <span className="text-white text-xs font-bold">RM</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-white text-xs font-semibold leading-tight truncate">Usuário</p>
+            <p className="text-white text-xs font-semibold leading-tight truncate">Usurio</p>
             <p className="text-[10px] leading-tight" style={{ color: "var(--sidebar-foreground)" }}>Coordenador NAPNE</p>
           </div>
           <button
@@ -339,14 +339,14 @@ function Sidebar({
   );
 }
 
-// â”€â”€ Topbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  Topbar 
 function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => void }) {
   const [notifOpen, setNotifOpen] = useState(false);
   return (
     <header className="bg-card border-b border-border px-6 py-3.5 flex items-center justify-between sticky top-0 z-10">
       <div>
         <h1 className="text-base font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{title}</h1>
-        <p className="text-xs text-muted-foreground">NAPNE Digital Â· {new Date().toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+        <p className="text-xs text-muted-foreground">NAPNE Digital · {new Date().toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
       </div>
       <div className="flex items-center gap-3">
         <div className="relative">
@@ -357,7 +357,7 @@ function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => 
           {notifOpen && (
             <div className="absolute right-0 top-11 w-80 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                <p className="text-sm font-semibold text-foreground">NotificaÃ§Ãµes</p>
+                <p className="text-sm font-semibold text-foreground">Notificações</p>
                 <span className="text-xs font-mono bg-red-50 text-red-600 px-1.5 py-0.5 rounded">3 novas</span>
               </div>
               {([] as { icon: typeof AlertCircle; color: string; title: string; sub: string; time: string }[]).map((n, i) => (
@@ -378,7 +378,7 @@ function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => 
             <span className="text-white text-xs font-bold">RM</span>
           </div>
           <div className="hidden sm:block">
-            <p className="text-xs font-semibold text-foreground leading-tight">Usuário</p>
+            <p className="text-xs font-semibold text-foreground leading-tight">Usurio</p>
             <p className="text-[10px] text-muted-foreground leading-tight">Coordenador</p>
           </div>
           <ChevronDown size={14} className="text-muted-foreground" />
@@ -388,7 +388,7 @@ function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => 
   );
 }
 
-// â”€â”€ SCREEN: Login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  SCREEN: Login 
 function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   const [siape, setSiape] = useState("");
   const [pass, setPass] = useState("");
@@ -417,10 +417,10 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
             </div>
           </div>
           <h2 className="text-white font-bold text-4xl leading-tight mb-4" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
-            InclusÃ£o com<br />tecnologia e cuidado.
+            Inclusão com<br />tecnologia e cuidado.
           </h2>
           <p className="text-white/60 text-sm leading-relaxed max-w-sm">
-            Plataforma de gestÃ£o e acompanhamento de estudantes com necessidades educacionais especÃ­ficas do Campus TrÃªs Lagoas.
+            Plataforma de gestão e acompanhamento de estudantes com necessidades educacionais específicas do Campus Três Lagoas.
           </p>
         </div>
       </div>
@@ -443,7 +443,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1.5">MatrÃ­cula SIAPE</label>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Matrícula SIAPE</label>
               <div className="relative">
                 <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -463,7 +463,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
                   type="password"
                   value={pass}
                   onChange={e => setPass(e.target.value)}
-                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                  placeholder=""
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-input-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-accent transition-all"
                 />
               </div>
@@ -495,13 +495,13 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
 
           <div className="mt-6 space-y-3">
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-              <p className="text-xs font-semibold text-blue-900 mb-2">ðŸ‘¤ UsuÃ¡rios de Teste</p>
+              <p className="text-xs font-semibold text-blue-900 mb-2"> Usuários de Teste</p>
               
             </div>
             <div className="p-3 rounded-lg bg-secondary/60 border border-border">
               <p className="text-xs text-muted-foreground text-center">
                 <Shield size={12} className="inline mr-1" />
-                Dados protegidos conforme LGPD Â· Acesso restrito a servidores autorizados
+                Dados protegidos conforme LGPD · Acesso restrito a servidores autorizados
               </p>
             </div>
           </div>
@@ -511,26 +511,58 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
-// â”€â”€ SCREEN: Overview (Dashboard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
+//  SCREEN: Overview (Dashboard) 
+function OverviewScreen({
+  students,
+  meetings,
+  careLogs,
+  occurrences,
+  onNav,
+}: {
+  students: Student[];
+  meetings: MeetingEvent[];
+  careLogs: CareLog[];
+  occurrences: Occurrence[];
+  onNav: (s: Screen) => void;
+}) {
+  const activeStudents = students.filter((student) => student.status === "Ativo").length;
+  const pendingCareLogs = students.filter(
+    (student) => !careLogs.some((log) => log.studentName === student.name)
+  ).length;
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+  const meetingsThisWeek = meetings.filter((meeting) => {
+    const meetingDate = new Date(`${meeting.date}T00:00:00`);
+    return meetingDate >= startOfWeek && meetingDate < endOfWeek;
+  });
+  const nextMeeting = [...meetings]
+    .filter((meeting) => new Date(`${meeting.date}T${meeting.time || "00:00"}`) >= today)
+    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0];
+
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
             icon={Users}
             label="Alunos Ativos"
-            value={47}
-            sub="+3 este semestre"
+            value={activeStudents}
+            sub={`${students.length} aluno${students.length !== 1 ? "s" : ""} cadastrado${students.length !== 1 ? "s" : ""}`}
             color="bg-primary"
             onClick={() => onNav("students")}
       />
-        <KpiCard icon={Clock} label="Atend. Pendentes" value={8} sub="Aguardando registro" color="bg-amber-500" />
-        <KpiCard icon={FileText} label="ProrrogaÃ§Ãµes" value={5} sub="Concedidas este mÃªs" color="bg-teal-600" />
+        <KpiCard icon={Clock} label="Atend. Pendentes" value={pendingCareLogs} sub="Aguardando registro" color="bg-amber-500" />
+        <KpiCard icon={FileText} label="Prorrogações" value={0} sub="Sem dados cadastrados" color="bg-teal-600" />
         <KpiCard
           icon={CalendarDays}
-          label="ReuniÃµes na Semana"
-          value={3}
-          sub="PrÃ³xima: 26/05 Ã s 14h"
+          label="Reuniões na Semana"
+          value={meetingsThisWeek.length}
+          sub={nextMeeting ? `Próxima: ${nextMeeting.date.split("-").reverse().join("/")} às ${nextMeeting.time}` : "Nenhuma reunião agendada"}
           color="bg-indigo-600"
           onClick={() => onNav("meetings")}
         />
@@ -543,19 +575,19 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
             <button className="text-xs font-medium hover:underline" style={{ color: "var(--accent)" }}>Ver todas</button>
           </div>
           <ul className="divide-y divide-border">
-            {TIMELINE_EVENTS.slice(0, 4).map((ev, i) => (
+            {careLogs.slice(0, 4).map((ev, i) => (
               <li key={i} className="px-5 py-3.5 flex gap-4 hover:bg-secondary/30 transition-colors">
                 <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {ev.type.includes("OcorrÃªncia") ? <AlertTriangle size={14} className="text-amber-500" /> :
-                   ev.type.includes("ReuniÃ£o") ? <CalendarDays size={14} className="text-blue-500" /> :
-                   ev.type.includes("ProrrogaÃ§Ã£o") ? <Clock size={14} className="text-teal-500" /> :
+                  {ev.type.includes("Ocorrência") ? <AlertTriangle size={14} className="text-amber-500" /> :
+                   ev.type.includes("Reunião") ? <CalendarDays size={14} className="text-blue-500" /> :
+                   ev.type.includes("Prorrogação") ? <Clock size={14} className="text-teal-500" /> :
                    <Activity size={14} className="text-indigo-500" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-xs font-semibold text-foreground">Nenhum aluno cadastrado</p>
-                      <p className="text-xs text-muted-foreground">{ev.type} Â· {ev.staff}</p>
+                      <p className="text-xs text-muted-foreground">{ev.type} · {ev.staff}</p>
                     </div>
                     <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{ev.date}</span>
                   </div>
@@ -563,6 +595,11 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
                 </div>
               </li>
             ))}
+            {careLogs.length === 0 && (
+              <li className="px-5 py-8 text-center text-sm text-muted-foreground">
+                Nenhuma atividade cadastrada.
+              </li>
+            )}
           </ul>
         </div>
 
@@ -570,36 +607,43 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
           <div className="bg-card rounded-lg border border-border overflow-hidden">
             <div className="px-4 py-3.5 border-b border-border flex items-center gap-2">
               <AlertCircle size={15} className="text-red-500" />
-              <h2 className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Alertas CrÃ­ticos</h2>
-              <span className="ml-auto font-mono text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded">2</span>
+              <h2 className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Alertas Críticos</h2>
+              <span className="ml-auto font-mono text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded">{occurrences.length}</span>
             </div>
-            {[
-              { name: "Nenhum aluno", msg: "Laudo mÃ©dico vencido", color: "text-red-500" },
-              { name: "Isabela R. Nunes", msg: "PEI nÃ£o atualizado em 90d", color: "text-amber-500" },
-            ].map((a, i) => (
+            {occurrences.slice(0, 2).map((a, i) => (
               <div key={i} className="px-4 py-3 flex items-start gap-2.5 border-b border-border last:border-0">
-                <AlertCircle size={14} className={`mt-0.5 flex-shrink-0 ${a.color}`} />
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-red-500" />
                 <div>
-                  <p className="text-xs font-medium text-foreground">{a.name}</p>
-                  <p className="text-xs text-muted-foreground">{a.msg}</p>
+                  <p className="text-xs font-medium text-foreground">{a.studentName}</p>
+                  <p className="text-xs text-muted-foreground">{a.title}</p>
                 </div>
               </div>
             ))}
+            {occurrences.length === 0 && (
+              <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+                Nenhum alerta cadastrado.
+              </div>
+            )}
           </div>
 
           <div className="bg-card rounded-lg border border-border">
             <div className="px-4 py-3.5 border-b border-border">
               <h2 className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Agenda da Semana</h2>
             </div>
-            {INITIAL_MEETINGS.map((m, i) => (
+            {meetingsThisWeek.map((m, i) => (
               <div key={i} className="px-4 py-3 flex gap-3 border-b border-border last:border-0">
                 <div className="w-1 rounded-full self-stretch bg-blue-500" />
                 <div>
-                  <p className="text-[10px] font-mono text-muted-foreground">{m.date.split("-").reverse().join("/")} Â· {m.time}</p>
-                  <p className="text-xs font-medium text-foreground mt-0.5">{m.type} Â· {m.studentName.split(" ")[0]}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">{m.date.split("-").reverse().join("/")} · {m.time}</p>
+                  <p className="text-xs font-medium text-foreground mt-0.5">{m.type} · {m.studentName.split(" ")[0]}</p>
                 </div>
               </div>
             ))}
+            {meetingsThisWeek.length === 0 && (
+              <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+                Nenhuma reunião na semana.
+              </div>
+            )}
           </div>
 
           <button onClick={() => onNav("students")} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: "var(--primary)" }}>
@@ -611,7 +655,7 @@ function OverviewScreen({ onNav }: { onNav: (s: Screen) => void }) {
   );
 }
 
-// â”€â”€ SCREEN: Students â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  SCREEN: Students 
 function StudentsScreen({
   students,
   setStudents,
@@ -628,11 +672,11 @@ function StudentsScreen({
 
   const [newStudentName, setNewStudentName] = useState("");
   const [newRegistration, setNewRegistration] = useState("");
-  const [newCourse, setNewCourse] = useState("TÃ©cnico em InformÃ¡tica");
-  const [newYear, setNewYear] = useState("1Âº Ano");
+  const [newCourse, setNewCourse] = useState("Técnico em Informática");
+  const [newYear, setNewYear] = useState("1º Ano");
   const [newNeed, setNewNeed] = useState("TEA");
 
-  const needs = ["Todas", "TEA", "TDAH", "DeficiÃªncia Visual", "DeficiÃªncia Auditiva", "Altas Habilidades", "Dislexia"];
+  const needs = ["Todas", "TEA", "TDAH", "Deficiência Visual", "Deficiência Auditiva", "Altas Habilidades", "Dislexia"];
   const filtered = students.filter(s =>
     (filterNeed === "Todas" || s.need === filterNeed) &&
     (s.name.toLowerCase().includes(search.toLowerCase()) || s.registration.includes(search))
@@ -649,7 +693,7 @@ function StudentsScreen({
       curso: newCourse,
       ano: newYear,
       necessidade_especial: newNeed,
-      cid: "NÃ£o informado",
+      cid: "Não informado",
       observacao: "",
     });
 
@@ -663,8 +707,8 @@ function StudentsScreen({
 
     setNewStudentName("");
     setNewRegistration("");
-    setNewCourse("TÃ©cnico em InformÃ¡tica");
-    setNewYear("1Âº Ano");
+    setNewCourse("Técnico em Informática");
+    setNewYear("1º Ano");
     setNewNeed("TEA");
     setShowModal(false);
     setModalStep(1);
@@ -675,7 +719,7 @@ function StudentsScreen({
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome ou matrÃ­cula..." className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome ou matrícula..." className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -699,7 +743,7 @@ function StudentsScreen({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
-                {["Nome / MatrÃ­cula", "NEE", "Curso / Turma", "Ano", "Status", "AÃ§Ãµes"].map(h => (
+                {["Nome / Matrícula", "NEE", "Curso / Turma", "Ano", "Status", "Ações"].map(h => (
                   <th key={h} className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -727,7 +771,7 @@ function StudentsScreen({
                   <td className="px-5 py-3.5"><StatusBadge status={s.status} /></td>
                   <td className="px-5 py-3.5">
                     <button onClick={() => onSelectStudent(s.id)} className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md hover:bg-secondary" style={{ color: "var(--accent)" }}>
-                      <Eye size={13} /> ProntuÃ¡rio
+                      <Eye size={13} /> Prontuário
                     </button>
                   </td>
                 </tr>
@@ -743,7 +787,7 @@ function StudentsScreen({
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <div>
                 <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Adicionar Novo Aluno</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Etapa {modalStep} de 3: {modalStep === 1 ? "Dados Pessoais" : modalStep === 2 ? "InformaÃ§Ãµes AcadÃªmicas" : "Anamnese Inicial"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Etapa {modalStep} de 3: {modalStep === 1 ? "Dados Pessoais" : modalStep === 2 ? "Informações Acadêmicas" : "Anamnese Inicial"}</p>
               </div>
               <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"><X size={16} className="text-muted-foreground" /></button>
             </div>
@@ -758,10 +802,10 @@ function StudentsScreen({
                   <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">Nome Completo *</label><input
                           value={newStudentName}
                           onChange={e => setNewStudentName(e.target.value)}
-                          placeholder="Ex: JoÃ£o Carlos da Silva"
+                          placeholder="Ex: João Carlos da Silva"
                           className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">MatrÃ­cula *</label><input
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Matrícula *</label><input
   value={newRegistration}
   onChange={e => setNewRegistration(e.target.value)}
   placeholder="2025001"
@@ -774,24 +818,24 @@ function StudentsScreen({
               )}
               {modalStep === 2 && (
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Curso *</label><select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>TÃ©cnico em InformÃ¡tica</option><option>TÃ©cnico em EletrotÃ©cnica</option></select></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Ano / Turma *</label><select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>1Âº Ano</option><option>2Âº Ano</option><option>3Âº Ano</option></select></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Curso *</label><select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>Técnico em Informática</option><option>Técnico em Eletrotécnica</option></select></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Ano / Turma *</label><select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>1º Ano</option><option>2º Ano</option><option>3º Ano</option></select></div>
                   <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">NEE *</label><select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">{needs.slice(1).map(n => <option key={n}>{n}</option>)}</select></div>
                   <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">CID-10</label><input placeholder="Ex: F84.0" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
               {modalStep === 3 && (
                 <div className="space-y-3">
-                  <p className="text-xs text-muted-foreground">InformaÃ§Ãµes da entrevista familiar inicial (Anamnese).</p>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Nome do ResponsÃ¡vel Principal</label><input placeholder="Nome completo" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">HistÃ³rico MÃ©dico / DiagnÃ³stico Resumido</label><textarea rows={3} placeholder="Descreva o histÃ³rico do aluno..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">ObservaÃ§Ãµes / PreferÃªncias de ComunicaÃ§Ã£o</label><textarea rows={2} placeholder="Outras informaÃ§Ãµes relevantes..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <p className="text-xs text-muted-foreground">Informações da entrevista familiar inicial (Anamnese).</p>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Nome do Responsável Principal</label><input placeholder="Nome completo" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Histórico Médico / Diagnóstico Resumido</label><textarea rows={3} placeholder="Descreva o histrico do aluno..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Observações / Preferências de Comunicação</label><textarea rows={2} placeholder="Outras informações relevantes..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
             </div>
             <div className="px-6 pb-5 flex items-center justify-between gap-3">
               <button onClick={() => modalStep > 1 ? setModalStep(s => s - 1) : setShowModal(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors">{modalStep > 1 ? "Voltar" : "Cancelar"}</button>
-              <button onClick={() => modalStep < 3 ? setModalStep(s => s + 1) : handleSaveStudent()}className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: modalStep === 3 ? "var(--accent)" : "var(--primary)" }}>{modalStep === 3 ? "Salvar Cadastro" : "PrÃ³xima Etapa"}</button>
+              <button onClick={() => modalStep < 3 ? setModalStep(s => s + 1) : handleSaveStudent()}className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: modalStep === 3 ? "var(--accent)" : "var(--primary)" }}>{modalStep === 3 ? "Salvar Cadastro" : "Próxima Etapa"}</button>
             </div>
           </div>
         </div>
@@ -811,10 +855,10 @@ function CorpoDocenteView({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('Todos');
   
-  // Estado para controlar a navegaÃ§Ã£o interna do perfil
+  // Estado para controlar a navegação interna do perfil
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 
-  // Estados para o formulÃ¡rio de cadastro
+  // Estados para o formulário de cadastro
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<StaffMember['role']>('Professor');
   const [newEmail, setNewEmail] = useState('');
@@ -854,7 +898,7 @@ function CorpoDocenteView({
   if (currentStaff) {
     return (
       <div className="p-6 space-y-6 animate-fade-in">
-        {/* BotÃ£o de Voltar e Nome */}
+        {/* Botão de Voltar e Nome */}
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setSelectedStaffId(null)}
@@ -868,7 +912,7 @@ function CorpoDocenteView({
           </div>
         </div>
 
-        {/* InformaÃ§Ãµes Gerais em Barra Horizontal Completa */}
+        {/* Informações Gerais em Barra Horizontal Completa */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-gray-200/80 shadow-xs">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><Mail size={18} /></div>
@@ -880,7 +924,7 @@ function CorpoDocenteView({
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><IdCard size={18} /></div>
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase">MatrÃ­cula SIAPE</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase">Matrícula SIAPE</p>
               <p className="text-sm text-gray-700 font-mono">{currentStaff.siape}</p>
             </div>
           </div>
@@ -888,7 +932,7 @@ function CorpoDocenteView({
             <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><GraduationCap size={18} /></div>
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase">Alunos Vinculados</p>
-              <p className="text-sm text-gray-700 font-bold">{currentStaff.students?.length || 0} alunos neste perÃ­odo</p>
+              <p className="text-sm text-gray-700 font-bold">{currentStaff.students?.length || 0} alunos neste período</p>
             </div>
           </div>
         </div>
@@ -905,9 +949,9 @@ function CorpoDocenteView({
                 <thead>
                   <tr className="border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase bg-gray-50/20">
                     <th className="py-3 px-4">Nome do Aluno</th>
-                    <th className="py-3 px-4">MatrÃ­cula</th>
+                    <th className="py-3 px-4">Matrícula</th>
                     <th className="py-3 px-4">Curso / Ano</th>
-                    <th className="py-3 px-4">CondiÃ§Ã£o/Necessidade</th>
+                    <th className="py-3 px-4">Condição/Necessidade</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
@@ -915,7 +959,7 @@ function CorpoDocenteView({
                     <tr key={student.id} className="hover:bg-gray-50/60 transition-colors">
                       <td className="py-3 px-4 font-semibold text-gray-700">{student.name}</td>
                       <td className="py-3 px-4 text-gray-500 font-mono text-xs">#{student.registration}</td>
-                      <td className="py-3 px-4 text-gray-600">{student.course} â€” {student.year}</td>
+                      <td className="py-3 px-4 text-gray-600">{student.course}  {student.year}</td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
                           {student.need}
@@ -928,7 +972,7 @@ function CorpoDocenteView({
             </div>
           ) : (
             <div className="p-8 text-center text-sm text-gray-400">
-              Nenhum aluno vinculado a este profissional no perÃ­odo selecionado.
+              Nenhum aluno vinculado a este profissional no período selecionado.
             </div>
           )}
         </div>
@@ -939,7 +983,7 @@ function CorpoDocenteView({
   // --- TELA DE LISTAGEM PRINCIPAL (OCUPA A TELA TODA) ---
   return (
     <div className="p-6 space-y-6">
-      {/* CabeÃ§alho */}
+      {/* Cabeçalho */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Equipe e Corpo Docente</h2>
@@ -954,9 +998,9 @@ function CorpoDocenteView({
         </button>
       </div>
 
-      {/* Filtro por Tipo de UsuÃ¡rio */}
+      {/* Filtro por Tipo de Usuário */}
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {['Todos', 'ResponsÃ¡vel', 'PsicÃ³logo', 'Agente', 'Coordenador NAPNE'].map((filter) => (
+        {['Todos', 'Responsável', 'Psicólogo', 'Agente', 'Coordenador NAPNE'].map((filter) => (
           <button
             key={filter}
             onClick={() => setSelectedFilter(filter)}
@@ -978,10 +1022,10 @@ function CorpoDocenteView({
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">
                 <th className="py-3.5 px-6">Nome Completo</th>
-                <th className="py-3.5 px-6">Cargo / FunÃ§Ã£o</th>
+                <th className="py-3.5 px-6">Cargo / Função</th>
                 <th className="py-3.5 px-6">SIAPE</th>
                 <th className="py-3.5 px-6">E-mail Institucional</th>
-                <th className="py-3.5 px-6 text-center">AÃ§Ãµes</th>
+                <th className="py-3.5 px-6 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-sm">
@@ -998,7 +1042,7 @@ function CorpoDocenteView({
                   <td className="py-4 px-6">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       member.role === 'Coordenador SINAPNE' ? 'bg-purple-100 text-purple-700' :
-                      member.role === 'PsicÃ³logo' ? 'bg-teal-100 text-teal-700' :
+                      member.role === 'Psicólogo' ? 'bg-teal-100 text-teal-700' :
                       member.role === 'Agente' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
                     }`}>
                       {member.role}
@@ -1021,7 +1065,7 @@ function CorpoDocenteView({
         </div>
       </div>
 
-      {/* Modal / FormulÃ¡rio de Cadastro */}
+      {/* Modal / Formulário de Cadastro */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl">
@@ -1052,14 +1096,14 @@ function CorpoDocenteView({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de UsuÃ¡rio</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Usuário</label>
                   <select 
                     value={newRole}
                     onChange={(e) => setNewRole(e.target.value as StaffMember['role'])}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="Professor">Professor(a)</option>
-                    <option value="Psicólogo">Psicólogo(a)</option>
+                    <option value="Psiclogo">Psiclogo(a)</option>
                     <option value="Agente">Agente</option>
                   </select>
                 </div>
@@ -1101,7 +1145,7 @@ function CorpoDocenteView({
 }
 
 
-// â”€â”€ SCREEN: Care Log & Management (Atendimentos Screen) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  SCREEN: Care Log & Management (Atendimentos Screen) 
 function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAddLogClick: () => void }) {
   const [search, setSearch] = useState("");
 
@@ -1127,7 +1171,7 @@ function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAdd
 
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
-          <p className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>HistÃ³rico Coletivo de Atendimentos</p>
+          <p className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Histórico Coletivo de Atendimentos</p>
           <span className="font-mono text-xs text-muted-foreground">{filteredLogs.length} registro(s)</span>
         </div>
         
@@ -1143,11 +1187,11 @@ function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAdd
                     <div>
                       <h3 className="text-sm font-bold text-foreground">{log.studentName}</h3>
                       <p className="text-xs text-muted-foreground font-medium mt-0.5">
-                        <span className="text-foreground font-semibold">{log.type}</span> Â· Registrado por {log.staff}
+                        <span className="text-foreground font-semibold">{log.type}</span> · Registrado por {log.staff}
                       </p>
                     </div>
                     <div className="text-right whitespace-nowrap">
-                      <span className="text-xs font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">{log.date} Ã s {log.time}</span>
+                      <span className="text-xs font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">{log.date} às {log.time}</span>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2 bg-secondary/30 p-3 rounded-lg border border-border/40 leading-relaxed">
@@ -1164,7 +1208,7 @@ function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAdd
         </div>
       </div>
 
-      {/* BotÃ£o flutuante no canto inferior direito */}
+      {/* Botão flutuante no canto inferior direito */}
       <button 
         onClick={onAddLogClick}
         className="fixed bottom-6 right-6 flex items-center gap-2 px-5 py-3 rounded-full text-sm font-bold text-white shadow-xl hover:scale-105 transition-all z-40 active:scale-95" 
@@ -1177,7 +1221,7 @@ function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAdd
 }
 
 
-/// â”€â”€ SCREEN: Student Record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+///  SCREEN: Student Record 
 function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOccurrence }: {
   studentId: string;
   onBack: () => void;
@@ -1188,23 +1232,23 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
   // 1. Atualizado o Estado da Tab para incluir "classes"
   const [tab, setTab] = useState<"timeline" | "pei" | "requests" | "classes">("timeline");
 
-  // 2. Estados adicionados para gerenciar o histÃ³rico de turmas e modal local
+  // 2. Estados adicionados para gerenciar o histórico de turmas e modal local
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
   const [classHistory, setClassHistory] = useState<ClassHistory[]>([]);
   
-  // Estados do formulÃ¡rio de nova turma
+  // Estados do formulário de nova turma
   const [newGradeYear, setNewGradeYear] = useState('');
   const [newSchoolYear, setNewSchoolYear] = useState(new Date().getFullYear());
   const [newSemester, setNewSemester] = useState(1);
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
-  // Lista de docentes disponÃ­veis para o checkbox do modal (Baseado no seu corpo docente)
+  // Lista de docentes disponíveis para o checkbox do modal (Baseado no seu corpo docente)
   const AVAILABLE_TEACHERS: string[] = [];
 
   const typeStyle = (type: string) => {
-    if (type.includes("OcorrÃªncia")) return { icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50" };
-    if (type.includes("ReuniÃ£o")) return { icon: CalendarDays, color: "text-blue-500", bg: "bg-blue-50" };
-    if (type.includes("ProrrogaÃ§Ã£o")) return { icon: Clock, color: "text-teal-500", bg: "bg-teal-50" };
+    if (type.includes("Ocorrência")) return { icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50" };
+    if (type.includes("Reunião")) return { icon: CalendarDays, color: "text-blue-500", bg: "bg-blue-50" };
+    if (type.includes("Prorrogação")) return { icon: Clock, color: "text-teal-500", bg: "bg-teal-50" };
     return { icon: Activity, color: "text-indigo-500", bg: "bg-indigo-50" };
   };
 
@@ -1213,7 +1257,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
     if (!newGradeYear.trim() || selectedTeachers.length === 0) return;
 
     // Conclui a turma ativa anterior automaticamente
-    const archivedHistory = classHistory.map(c => c.status === 'Ativo' ? { ...c, status: 'ConcluÃ­do' } : c);
+    const archivedHistory = classHistory.map(c => c.status === 'Ativo' ? { ...c, status: 'Concluído' } : c);
 
     const newClass = {
       id: String(Date.now()),
@@ -1244,10 +1288,10 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="font-bold text-foreground text-xl" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{student.name}</h2>
-                {student.alert && <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded ring-1 ring-red-200"><AlertTriangle size={11} /> AtenÃ§Ã£o</span>}
+                {student.alert && <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded ring-1 ring-red-200"><AlertTriangle size={11} /> Atenção</span>}
                 <StatusBadge status={student.status} />
               </div>
-              <p className="font-mono text-xs text-muted-foreground mt-0.5">MatrÃ­cula #{student.registration}</p>
+              <p className="font-mono text-xs text-muted-foreground mt-0.5">Matrícula #{student.registration}</p>
               <div className="flex flex-wrap gap-2 mt-2">
                 <Badge text={student.need} color={student.needColor} />
                 <Badge text={student.course} color="gray" />
@@ -1262,19 +1306,19 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                 onClick={() => onScheduleMeeting(student)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-border hover:bg-secondary transition-colors whitespace-nowrap text-foreground"
               >
-                <CalendarDays size={13} /> Agendar ReuniÃ£o
+                <CalendarDays size={13} /> Agendar Reunião
               </button>
               <button
                 onClick={() => onCreateOccurrence(student)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-border hover:bg-secondary transition-colors whitespace-nowrap text-foreground"
               >
-                <AlertTriangle size={13} /> Nova OcorrÃªncia
+                <AlertTriangle size={13} /> Nova Ocorrência
               </button>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border">
             {[
-              { label: "ResponsÃ¡vel", value: "Sra. PatrÃ­cia Moreira", icon: User },
+              { label: "Responsável", value: "Sra. Patrícia Moreira", icon: User },
               { label: "Contato", value: "(67) 9 9874-3321", icon: Phone },
               { label: "E-mail", value: "patricia.m@email.com", icon: Mail },
               { label: "CID-10", value: "F84.0 (TEA)", icon: BookOpen },
@@ -1295,10 +1339,10 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="border-b border-border flex flex-wrap">
           {[
-            { key: "timeline", label: "HistÃ³rico / Linha do Tempo" }, 
+            { key: "timeline", label: "Histórico / Linha do Tempo" }, 
             { key: "pei", label: "Planos de Ensino (PEI)" }, 
-            { key: "requests", label: "SolicitaÃ§Ãµes" },
-            { key: "classes", label: "Turmas / Semestres" } // <-- Inserido o item na navegaÃ§Ã£o
+            { key: "requests", label: "Solicitações" },
+            { key: "classes", label: "Turmas / Semestres" } // <-- Inserido o item na navegação
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-5 py-3.5 text-sm font-medium transition-all border-b-2 -mb-px ${tab === t.key ? "border-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`} style={tab === t.key ? { borderBottomColor: "var(--accent)" } : {}}>
               {t.label}
@@ -1318,8 +1362,8 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                       <div className={`absolute -left-10 w-7 h-7 rounded-full flex items-center justify-center ${bg} ring-2 ring-card`}><Icon size={13} className={color} /></div>
                       <div className="bg-secondary/30 rounded-lg p-4">
                         <div className="flex items-start justify-between gap-2 flex-wrap">
-                          <div><span className={`text-xs font-semibold ${color}`}>{ev.type}</span><span className="text-muted-foreground text-xs mx-1.5">Â·</span><span className="text-xs text-muted-foreground">{ev.staff}</span></div>
-                          <span className="font-mono text-[10px] text-muted-foreground">{ev.date} Â· {ev.time}</span>
+                          <div><span className={`text-xs font-semibold ${color}`}>{ev.type}</span><span className="text-muted-foreground text-xs mx-1.5">·</span><span className="text-xs text-muted-foreground">{ev.staff}</span></div>
+                          <span className="font-mono text-[10px] text-muted-foreground">{ev.date} · {ev.time}</span>
                         </div>
                         <p className="text-sm text-foreground mt-1.5 leading-relaxed">{ev.text}</p>
                       </div>
@@ -1337,7 +1381,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                   <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0"><FileText size={18} className="text-blue-600" /></div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-foreground">{p.title}</p>
-                    <p className="text-xs text-muted-foreground">Criado em {p.date} Â· {p.author}</p>
+                    <p className="text-xs text-muted-foreground">Criado em {p.date} · {p.author}</p>
                   </div>
                   <div className="flex items-center gap-2"><StatusBadge status={p.status} /><button className="p-1.5 rounded-md hover:bg-secondary transition-colors"><Download size={14} className="text-muted-foreground" /></button></div>
                 </div>
@@ -1349,15 +1393,15 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
           {tab === "requests" && (
             <div className="space-y-3">
               {[
-                { type: "ProrrogaÃ§Ã£o de Prazo", subject: "TCC Semestral â€” Banco de Dados", days: 7, date: "28/04/2025", status: "Deferida", statusColor: "green" },
-                { type: "ProrrogaÃ§Ã£o de Prazo", subject: "AvaliaÃ§Ã£o Unidade II â€” MatemÃ¡tica", days: 5, date: "10/03/2025", status: "Deferida", statusColor: "green" },
-                { type: "AdaptaÃ§Ã£o de AvaliaÃ§Ã£o", subject: "FÃ­sica â€” Prova P2", days: null, date: "01/03/2025", status: "Pendente", statusColor: "amber" },
+                { type: "Prorrogação de Prazo", subject: "TCC Semestral  Banco de Dados", days: 7, date: "28/04/2025", status: "Deferida", statusColor: "green" },
+                { type: "Prorrogação de Prazo", subject: "Avaliação Unidade II  Matemática", days: 5, date: "10/03/2025", status: "Deferida", statusColor: "green" },
+                { type: "Adaptação de Avaliação", subject: "Física  Prova P2", days: null, date: "01/03/2025", status: "Pendente", statusColor: "amber" },
               ].map((r, i) => (
                 <div key={i} className="p-4 rounded-lg border border-border flex items-start gap-3">
                   <Clock size={16} className="text-teal-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap"><p className="text-sm font-semibold text-foreground">{r.type}</p><Badge text={r.status} color={r.statusColor} /></div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{r.subject} {r.days ? `Â· +${r.days} dias` : ""}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{r.subject} {r.days ? `· +${r.days} dias` : ""}</p>
                     <p className="font-mono text-[10px] text-muted-foreground mt-1">Solicitado em {r.date}</p>
                   </div>
                 </div>
@@ -1365,12 +1409,12 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
             </div>
           )}
 
-          {/* 3. RenderizaÃ§Ã£o da nova Aba de Turmas / Semestres */}
+          {/* 3. Renderização da nova Aba de Turmas / Semestres */}
           {tab === "classes" && (
             <div className="space-y-4">
               <div className="flex justify-between items-center mb-2">
                 <div>
-                  <h4 className="text-sm font-bold text-foreground">HistÃ³rico de EnturmaÃ§Ã£o Semestral</h4>
+                  <h4 className="text-sm font-bold text-foreground">Histórico de Enturmação Semestral</h4>
                   <p className="text-xs text-muted-foreground">Acompanhe as turmas pelas quais o aluno passou.</p>
                 </div>
                 <button 
@@ -1392,7 +1436,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                           <span className={`inline-block text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mr-2 ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-secondary text-muted-foreground'}`}>
                             {item.schoolYear}.{item.semester}
                           </span>
-                          <span className="text-sm font-bold text-foreground">{item.course} â€” {item.gradeYear}</span>
+                          <span className="text-sm font-bold text-foreground">{item.course}  {item.gradeYear}</span>
                         </div>
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
                           {item.status}
@@ -1415,12 +1459,12 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
         </div>
       </div>
 
-      {/* 4. Modal para o cadastro/vÃ­nculo da nova turma */}
+      {/* 4. Modal para o cadastro/vínculo da nova turma */}
       {isClassModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-card border border-border rounded-xl p-5 max-w-md w-full shadow-xl">
             <h3 className="text-base font-bold text-foreground mb-1">Enturmar em Novo Semestre</h3>
-            <p className="text-xs text-muted-foreground mb-4">Insira os parÃ¢metros da nova fase e selecione os professores atuais.</p>
+            <p className="text-xs text-muted-foreground mb-4">Insira os parâmetros da nova fase e selecione os professores atuais.</p>
             
             <form onSubmit={handleCreateClass} className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
@@ -1428,7 +1472,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fase/Ano</label>
                   <input 
                     type="text" 
-                    placeholder="Ex: 3Âº Ano" 
+                    placeholder="Ex: 3º Ano" 
                     value={newGradeYear}
                     onChange={(e) => setNewGradeYear(e.target.value)}
                     className="w-full border border-border bg-secondary/20 rounded-md px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -1452,8 +1496,8 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                     onChange={(e) => setNewSemester(Number(e.target.value))}
                     className="w-full border border-border bg-secondary/20 rounded-md px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
                   >
-                    <option value={1}>1Âº Sem.</option>
-                    <option value={2}>2Âº Sem.</option>
+                    <option value={1}>1º Sem.</option>
+                    <option value={2}>2º Sem.</option>
                   </select>
                 </div>
               </div>
@@ -1491,7 +1535,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                   disabled={selectedTeachers.length === 0}
                   className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
                 >
-                  Confirmar MatrÃ­cula
+                  Confirmar Matrícula
                 </button>
               </div>
             </form>
@@ -1502,7 +1546,7 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
   );
 }
 
-// â”€â”€ SCREEN: Log Interaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  SCREEN: Log Interaction 
 function LogScreen({ onBack }: { onBack: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1513,20 +1557,20 @@ function LogScreen({ onBack }: { onBack: () => void }) {
       <div className="max-w-2xl mx-auto">
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <div className="px-6 py-4 border-b border-border" style={{ background: "var(--primary)" }}>
-            <p className="font-bold text-white" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Registrar Atendimento / OcorrÃªncia</p>
-            <p className="text-white/60 text-xs mt-0.5">Todos os registros sÃ£o auditÃ¡veis e fazem parte do prontuÃ¡rio permanente.</p>
+            <p className="font-bold text-white" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Registrar Atendimento / Ocorrência</p>
+            <p className="text-white/60 text-xs mt-0.5">Todos os registros são auditáveis e fazem parte do prontuário permanente.</p>
           </div>
           <div className="p-6 space-y-5">
             {saved && <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium"><CheckCircle size={16} /> Registro salvo com sucesso!</div>}
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
-                <select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">{([] as Student[]).map(s => <option key={s.id}>{s.name} — #{s.registration}</option>)}</select>
+                <select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">{([] as Student[]).map(s => <option key={s.id}>{s.name}  #{s.registration}</option>)}</select>
               </div>
               <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Tipo de InteraÃ§Ã£o *</label>
+                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Tipo de Interação *</label>
                 <select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-                  {["Atendimento Individual", "ReuniÃ£o com Pais", "Incidente AcadÃªmico", "OcorrÃªncia Comportamental", "RevisÃ£o de PEI", "Contato TelefÃ´nico"].map(t => <option key={t}>{t}</option>)}
+                  {["Atendimento Individual", "Reunião com Pais", "Incidente Acadêmico", "Ocorrência Comportamental", "Revisão de PEI", "Contato Telefônico"].map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
               <div>
@@ -1534,19 +1578,19 @@ function LogScreen({ onBack }: { onBack: () => void }) {
                 <input type="datetime-local" defaultValue={new Date().toISOString().slice(0, 16)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="col-span-2">
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Servidor ResponsÃ¡vel</label>
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground"><Shield size={14} /><span>Usuário â€” Coordenador NAPNE</span><span className="ml-auto text-[10px] font-mono bg-secondary px-1.5 py-0.5 rounded">Somente leitura</span></div>
+                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Servidor Responsável</label>
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground"><Shield size={14} /><span>Usurio  Coordenador NAPNE</span><span className="ml-auto text-[10px] font-mono bg-secondary px-1.5 py-0.5 rounded">Somente leitura</span></div>
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Relato Descritivo *</label>
-                <textarea rows={6} placeholder="Descreva detalhadamente o atendimento, observaÃ§Ãµes do aluno, estratÃ©gias utilizadas e prÃ³ximos passos..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none leading-relaxed" />
+                <textarea rows={6} placeholder="Descreva detalhadamente o atendimento, observações do aluno, estratégias utilizadas e próximos passos..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none leading-relaxed" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Documentos Anexos</label>
                 <div onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={e => { e.preventDefault(); setDragOver(false); }} className={`border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer ${dragOver ? "border-accent bg-teal-50" : "border-border bg-secondary/20 hover:bg-secondary/40"}`} style={dragOver ? { borderColor: "var(--accent)" } : {}}>
                   <Upload size={20} className="mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm font-medium text-foreground">Arraste arquivos ou clique para selecionar</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">PDF, JPG, PNG â€” mÃ¡x. 10MB por arquivo</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">PDF, JPG, PNG  máx. 10MB por arquivo</p>
                 </div>
               </div>
             </div>
@@ -1561,9 +1605,9 @@ function LogScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-// â”€â”€ SCREEN: Meetings Calendar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const MONTH_NAMES = ["Janeiro", "Fevereiro", "MarÃ§o", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "SÃ¡b"];
+//  SCREEN: Meetings Calendar 
+const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
   meetings: MeetingEvent[];
@@ -1581,7 +1625,7 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
   const [formStudent, setFormStudent] = useState(prefilledStudent?.name ?? "");
   const [formDate, setFormDate] = useState(prefilledStudent ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}` : "");
   const [formTime, setFormTime] = useState("09:00");
-  const [formType, setFormType] = useState("ReuniÃ£o com FamÃ­lia");
+  const [formType, setFormType] = useState("Reunião com Família");
   const [formDesc, setFormDesc] = useState("");
   const [formTeachers, setFormTeachers] = useState<string[]>(prefilledStudent?.teachers ?? []);
   const [saved, setSaved] = useState(false);
@@ -1634,11 +1678,11 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-secondary transition-colors"><ChevronLeft size={16} className="text-muted-foreground" /></button>
-          <h2 className="text-base font-bold text-foreground min-w-[180px] text-center" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{MONTH_NAMES[month]} Â· {year}</h2>
+          <h2 className="text-base font-bold text-foreground min-w-[180px] text-center" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{MONTH_NAMES[month]} · {year}</h2>
           <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-secondary transition-colors"><ChevronRight size={16} className="text-muted-foreground" /></button>
         </div>
         <button onClick={() => { setShowForm(true); setFormStudent(""); setFormTeachers([]); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: "var(--accent)" }}>
-          <Plus size={15} /> Nova ReuniÃ£o
+          <Plus size={15} /> Nova Reunião
         </button>
       </div>
 
@@ -1676,7 +1720,7 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
                       <div className="mt-1 space-y-0.5">
                         {dayMeetings.slice(0, 2).map((m, j) => (
                           <div key={j} className="text-[10px] font-medium px-1.5 py-0.5 rounded truncate" style={{ background: "var(--primary)", color: "#fff", opacity: 0.9 }}>
-                            {m.time} Â· {m.studentName.split(" ")[0]}
+                            {m.time} · {m.studentName.split(" ")[0]}
                           </div>
                         ))}
                         {dayMeetings.length > 2 && <div className="text-[10px] text-muted-foreground px-1">+{dayMeetings.length - 2}</div>}
@@ -1702,8 +1746,8 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
               {selectedDayMeetings.length === 0 ? (
                 <div className="px-4 py-8 text-center">
                   <CalendarDays size={28} className="mx-auto text-muted-foreground mb-2 opacity-40" />
-                  <p className="text-xs text-muted-foreground">Nenhuma reuniÃ£o neste dia.</p>
-                  <button onClick={() => { setShowForm(true); setFormDate(selectedDayStr ?? ""); }} className="mt-3 text-xs font-medium hover:underline" style={{ color: "var(--accent)" }}>+ Criar reuniÃ£o aqui</button>
+                  <p className="text-xs text-muted-foreground">Nenhuma reunião neste dia.</p>
+                  <button onClick={() => { setShowForm(true); setFormDate(selectedDayStr ?? ""); }} className="mt-3 text-xs font-medium hover:underline" style={{ color: "var(--accent)" }}>+ Criar reunião aqui</button>
                 </div>
               ) : (
                 <ul className="divide-y divide-border">
@@ -1714,7 +1758,7 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
                         <Badge text={m.type} color="blue" />
                       </div>
                       <p className="text-xs font-medium text-foreground">{m.studentName}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{m.description || "â€”"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.description || ""}</p>
                       {m.teachers.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {m.teachers.map(t => <span key={t} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground">{t}</span>)}
@@ -1728,13 +1772,13 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
           ) : (
             <div className="bg-card rounded-lg border border-border overflow-hidden">
               <div className="px-4 py-3.5 border-b border-border">
-                <p className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>PrÃ³ximas ReuniÃµes</p>
+                <p className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Próximas Reuniões</p>
               </div>
               <ul className="divide-y divide-border">
                 {meetings.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5).map(m => (
                   <li key={m.id} className="px-4 py-3 hover:bg-secondary/20 transition-colors cursor-pointer">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-mono text-[10px] text-muted-foreground">{m.date.split("-").reverse().join("/")} Â· {m.time}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">{m.date.split("-").reverse().join("/")} · {m.time}</span>
                     </div>
                     <p className="text-xs font-semibold text-foreground">{m.studentName}</p>
                     <p className="text-xs text-muted-foreground">{m.type}</p>
@@ -1751,17 +1795,17 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(13,28,54,0.7)" }}>
           <div className="bg-card rounded-xl border border-border w-full max-w-lg shadow-2xl">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Agendar ReuniÃ£o</p>
+              <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Agendar Reunião</p>
               <button onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"><X size={16} className="text-muted-foreground" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              {saved && <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium"><CheckCircle size={16} /> ReuniÃ£o agendada com sucesso!</div>}
+              {saved && <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium"><CheckCircle size={16} /> Reunião agendada com sucesso!</div>}
 
               <div>
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
                 <select value={formStudent} onChange={e => { setFormStudent(e.target.value); const s = students.find(st => st.name === e.target.value); setFormTeachers(s?.teachers ?? []); }} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="">Selecione o aluno...</option>
-                  {students.map(s => <option key={s.id} value={s.name}>{s.name} — #{s.registration}</option>)}
+                  {students.map(s => <option key={s.id} value={s.name}>{s.name}  #{s.registration}</option>)}
                 </select>
               </div>
 
@@ -1777,9 +1821,9 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Tipo de ReuniÃ£o</label>
+                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Tipo de Reunião</label>
                 <select value={formType} onChange={e => setFormType(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-                  {["ReuniÃ£o com FamÃ­lia", "RevisÃ£o de PEI", "Atendimento PedagÃ³gico", "Conselho de Classe", "Outra"].map(t => <option key={t}>{t}</option>)}
+                  {["Reunião com Família", "Revisão de PEI", "Atendimento Pedagógico", "Conselho de Classe", "Outra"].map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
 
@@ -1798,8 +1842,8 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
               )}
 
               <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">DescriÃ§Ã£o / Pauta</label>
-                <textarea rows={3} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Descreva o objetivo da reuniÃ£o, temas a tratar, documentos necessÃ¡rios..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Descrição / Pauta</label>
+                <textarea rows={3} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Descreva o objetivo da reunião, temas a tratar, documentos necessários..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
               </div>
             </div>
             <div className="px-6 pb-5 flex items-center justify-end gap-3 border-t border-border pt-4">
@@ -1813,7 +1857,7 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
   );
 }
 
-/// â”€â”€ SCREEN: Occurrences â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+///  SCREEN: Occurrences 
 function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, students }: {
   occurrences: Occurrence[];
   setOccurrences: React.Dispatch<React.SetStateAction<Occurrence[]>>;
@@ -1828,7 +1872,7 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, stud
   const [formDesc, setFormDesc] = useState("");
   const [saved, setSaved] = useState(false);
 
-  const SUBJECTS = ["Banco de Dados", "ProgramaÃ§Ã£o Orientada a Objetos", "MatemÃ¡tica", "FÃ­sica", "QuÃ­mica OrgÃ¢nica", "Contabilidade", "EletrotÃ©cnica", "InglÃªs", "Redes de Computadores"];
+  const SUBJECTS = ["Banco de Dados", "Programação Orientada a Objetos", "Matemática", "Física", "Química Orgânica", "Contabilidade", "Eletrotécnica", "Inglês", "Redes de Computadores"];
 
   useEffect(() => {
     if (prefilledStudent) {
@@ -1839,7 +1883,7 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, stud
 
   const handleSave = async () => {
     if (!formStudent || !formTitle || !formDesc) return;
-    const subject = formSubject || "Não especificado";
+    const subject = formSubject || "No especificado";
     const savedOccurrence = await apiClient.createOcorrencia({
       titulo: formTitle,
       descricao: `Aluno: ${formStudent}\nDisciplina: ${subject}\n${formDesc}`,
@@ -1871,10 +1915,10 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, stud
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por aluno, tÃ­tulo ou disciplina..." className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por aluno, título ou disciplina..." className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
         </div>
         <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white whitespace-nowrap transition-all hover:opacity-90" style={{ background: "var(--destructive)" }}>
-          <Plus size={15} /> Nova OcorrÃªncia
+          <Plus size={15} /> Nova Ocorrência
         </button>
       </div>
 
@@ -1882,7 +1926,7 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, stud
         {filtered.length === 0 && (
           <div className="bg-card rounded-lg border border-border p-12 text-center">
             <AlertTriangle size={32} className="mx-auto text-muted-foreground opacity-30 mb-3" />
-            <p className="text-sm text-muted-foreground">Nenhuma ocorrÃªncia registrada.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma ocorrência registrada.</p>
           </div>
         )}
         {filtered.map(occ => (
@@ -1897,7 +1941,7 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, stud
                     <p className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{occ.title}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs font-medium text-foreground">{occ.studentName}</span>
-                      <span className="text-muted-foreground text-xs">Â·</span>
+                      <span className="text-muted-foreground text-xs">·</span>
                       <Badge text={occ.subject} color="amber" />
                     </div>
                   </div>
@@ -1917,16 +1961,16 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, stud
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(13,28,54,0.7)" }}>
           <div className="bg-card rounded-xl border border-border w-full max-w-lg shadow-2xl">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Registrar OcorrÃªncia</p>
+              <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Registrar Ocorrência</p>
               <button onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"><X size={16} className="text-muted-foreground" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              {saved && <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium"><CheckCircle size={16} /> OcorrÃªncia registrada!</div>}
+              {saved && <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium"><CheckCircle size={16} /> Ocorrência registrada!</div>}
               <div>
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
                 <select value={formStudent} onChange={e => setFormStudent(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="">Selecione o aluno...</option>
-                  {students.map(s => <option key={s.id} value={s.name}>{s.name} — #{s.registration}</option>)}
+                  {students.map(s => <option key={s.id} value={s.name}>{s.name}  #{s.registration}</option>)}
                 </select>
               </div>
               <div>
@@ -1937,12 +1981,12 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, stud
                 </select>
               </div>
               <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">TÃ­tulo da OcorrÃªncia *</label>
+                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Título da Ocorrência *</label>
                 <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Ex: Dificuldade em atividade em grupo" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">DescriÃ§Ã£o da SituaÃ§Ã£o *</label>
-                <textarea rows={4} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Descreva detalhadamente o que ocorreu, o contexto, comportamentos observados e possÃ­veis impactos..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Descrição da Situação *</label>
+                <textarea rows={4} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Descreva detalhadamente o que ocorreu, o contexto, comportamentos observados e possíveis impactos..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
               </div>
             </div>
             <div className="px-6 pb-5 flex items-center justify-end gap-3 border-t border-border pt-4">
@@ -1956,10 +2000,10 @@ function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, stud
   );
 }
 
-// â”€â”€ SCREEN: Profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  SCREEN: Profile 
 function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState("Usuário");
+  const [name, setName] = useState("Usurio");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("(67) 9 9234-5678");
   const [role, setRole] = useState("Coordenador NAPNE");
@@ -2101,7 +2145,7 @@ function ProfileScreen() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cargo / FunÃ§Ã£o</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cargo / Função</label>
               {isEditing ? (
                 <input
                   type="text"
@@ -2116,20 +2160,20 @@ function ProfileScreen() {
           </div>
 
           <div className="mt-6 pt-6 border-t border-border">
-            <h3 className="text-sm font-bold text-foreground mb-3" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>InformaÃ§Ãµes da Conta</h3>
+            <h3 className="text-sm font-bold text-foreground mb-3" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Informações da Conta</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center gap-2">
                 <Shield size={14} className="text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-muted-foreground">NÃ­vel de Acesso</p>
+                  <p className="text-xs text-muted-foreground">Nível de Acesso</p>
                   <p className="text-sm text-foreground font-medium">Administrador</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Clock size={14} className="text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-muted-foreground">Ãšltimo Acesso</p>
-                  <p className="text-sm text-foreground font-medium">{new Date().toLocaleDateString("pt-BR")} Ã s 14:32</p>
+                  <p className="text-xs text-muted-foreground">ltimo Acesso</p>
+                  <p className="text-sm text-foreground font-medium">{new Date().toLocaleDateString("pt-BR")} às 14:32</p>
                 </div>
               </div>
             </div>
@@ -2140,7 +2184,7 @@ function ProfileScreen() {
   );
 }
 
-// â”€â”€ Placeholder screens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  Placeholder screens 
 function PlaceholderScreen({ label }: { label: string }) {
   return (
     <div className="p-12 flex flex-col items-center justify-center text-center">
@@ -2148,12 +2192,12 @@ function PlaceholderScreen({ label }: { label: string }) {
         <Star size={28} className="text-muted-foreground" />
       </div>
       <p className="font-bold text-foreground text-lg" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{label}</p>
-      <p className="text-sm text-muted-foreground mt-1.5 max-w-xs">Esta seÃ§Ã£o estÃ¡ em desenvolvimento e estarÃ¡ disponÃ­vel em breve.</p>
+      <p className="text-sm text-muted-foreground mt-1.5 max-w-xs">Esta seção está em desenvolvimento e estará disponível em breve.</p>
     </div>
   );
 }
 
-// â”€â”€ Root App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  Root App 
 export default function App({
   currentUser: loggedInUser,
   onLogout,
@@ -2221,13 +2265,13 @@ export default function App({
     };
   }, []);
 
-  // Filtrar estudantes baseado no role do usuÃ¡rio
+  // Filtrar estudantes baseado no role do usuário
   const getVisibleStudents = (): Student[] => {
     if (!currentUser) return [];
     if (currentUser.role === "Coordenadora") {
-      return students; // Coordenadora vÃª todos
+      return students; // Coordenadora vê todos
     } else if (currentUser.role === "Acompanhadora") {
-      // Acompanhadora vÃª apenas seus alunos
+      // Acompanhadora vê apenas seus alunos
       const accompStudentIds = ACOMPANHADORA_STUDENTS[currentUser.id] || [];
       return students.filter(s => accompStudentIds.includes(s.id));
     }
@@ -2282,14 +2326,14 @@ export default function App({
 
 
   const TITLES: Record<Screen, string> = {
-    overview: "VisÃ£o Geral",
-    students: selectedStudent ? "ProntuÃ¡rio EletrÃ´nico" : "GestÃ£o de Alunos",
+    overview: "Visão Geral",
+    students: selectedStudent ? "Prontuário Eletrônico" : "Gestão de Alunos",
     servers: "Corpo Docente",
     log: "Registrar Atendimento",
-    meetings: "ReuniÃµes",
-    occurrences: "OcorrÃªncias",
+    meetings: "Reuniões",
+    occurrences: "Ocorrências",
     profile: "Meu Perfil",
-    record: "ProntuÃ¡rio",
+    record: "Prontuário",
   };
 
   return (
@@ -2311,14 +2355,22 @@ export default function App({
         )}
         {showLog && (
           <div className="px-6 py-2.5 bg-card border-b border-border flex items-center gap-1.5 text-xs text-muted-foreground">
-            <button onClick={() => setShowLog(false)} className="hover:text-foreground transition-colors flex items-center gap-1"><ChevronLeft size={12} /> ProntuÃ¡rio</button>
+            <button onClick={() => setShowLog(false)} className="hover:text-foreground transition-colors flex items-center gap-1"><ChevronLeft size={12} /> Prontuário</button>
             <ChevronRight size={12} />
             <span className="text-foreground font-medium">Novo Atendimento</span>
           </div>
         )}
 
         <main className="flex-1 overflow-y-auto">
-          {activeNav === "overview" && <OverviewScreen onNav={handleNav} />}
+          {activeNav === "overview" && (
+            <OverviewScreen
+              students={students}
+              meetings={meetings}
+              careLogs={careLogs}
+              occurrences={occurrences}
+              onNav={handleNav}
+            />
+          )}
           {activeNav === "students" && !selectedStudent && <StudentsScreen
               students={students}
               setStudents={setStudents}
@@ -2350,6 +2402,7 @@ export default function App({
               meetings={meetings}
               setMeetings={setMeetings}
               prefilledStudent={meetingPrefilledStudent}
+              students={students}
             />
           )}
           {activeNav === "occurrences" && (
@@ -2361,14 +2414,3 @@ export default function App({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
