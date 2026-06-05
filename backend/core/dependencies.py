@@ -47,6 +47,14 @@ def require_document_upload_permission(
     return current_user
 
 
+def require_atendimento_permission(
+    current_user: Usuario = Depends(get_current_user),
+):
+    if current_user.cargo not in (Cargo.COORDENADOR, Cargo.PSICOLOGO):
+        raise HTTPException(status_code=403, detail="Usuário não autorizado")
+    return current_user
+
+
 def usuario_tem_acesso_turma(usuario: Usuario, turma_id: int, db: Session) -> bool:
     if usuario.cargo == Cargo.COORDENADOR:
         return True

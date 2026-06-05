@@ -28,6 +28,12 @@ from .atendimento_service import (
     get_atendimento_service,
     update_atendimento_service,
 )
+from .ocorrencia_service import (
+    create_ocorrencia_service,
+    list_ocorrencias_service,
+    get_ocorrencia_service,
+    update_ocorrencia_service,
+)
 
 __all__ = [
     "login_service",
@@ -53,4 +59,8 @@ __all__ = [
     "list_atendimentos_service",
     "get_atendimento_service",
     "update_atendimento_service",
+    "create_ocorrencia_service",
+    "list_ocorrencias_service",
+    "get_ocorrencia_service",
+    "update_ocorrencia_service",
 ]

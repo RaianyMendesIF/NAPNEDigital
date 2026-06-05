@@ -44,10 +44,19 @@ def create_atendimento_service(
     )
 
 
-def list_atendimentos_service(db: Session, aluno_id: int | None = None):
+def list_atendimentos_service(
+    db: Session,
+    aluno_id: int | None = None,
+    data_inicial: date | None = None,
+    data_final: date | None = None,
+):
     query = db.query(Atendimento)
     if aluno_id is not None:
         query = query.filter(Atendimento.aluno_id == aluno_id)
+    if data_inicial is not None:
+        query = query.filter(Atendimento.data_solicitacao >= data_inicial)
+    if data_final is not None:
+        query = query.filter(Atendimento.data_solicitacao <= data_final)
     atendimentos = query.order_by(Atendimento.data_solicitacao.desc()).all()
     return success_message(
         data=[_atendimento_data(a) for a in atendimentos],

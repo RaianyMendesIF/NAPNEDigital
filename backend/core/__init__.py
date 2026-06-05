@@ -6,6 +6,7 @@ from .dependencies import (
     require_admin,
     require_gestor,
     require_document_upload_permission,
+    require_atendimento_permission,
     require_professor_in_turma,
     usuario_tem_acesso_turma,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "require_admin",
     "require_gestor",
     "require_document_upload_permission",
+    "require_atendimento_permission",
     "require_professor_in_turma",
     "usuario_tem_acesso_turma",
 ]

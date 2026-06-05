@@ -18,6 +18,11 @@ from .atendimento_schemas import (
     AtendimentoUpdate,
     AtendimentoResponse,
 )
+from .ocorrencia_schemas import (
+    OcorrenciaCreate,
+    OcorrenciaUpdate,
+    OcorrenciaResponse,
+)
 
 __all__ = [
     "authRequest",
@@ -38,4 +43,7 @@ __all__ = [
     "AtendimentoCreate",
     "AtendimentoUpdate",
     "AtendimentoResponse",
+    "OcorrenciaCreate",
+    "OcorrenciaUpdate",
+    "OcorrenciaResponse",
 ]
