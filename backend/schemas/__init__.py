@@ -23,6 +23,13 @@ from .ocorrencia_schemas import (
     OcorrenciaUpdate,
     OcorrenciaResponse,
 )
+from .solicitacao_schemas import (
+    SolicitacaoCreate,
+    SolicitacaoUpdate,
+    SolicitacaoStatusUpdate,
+    SolicitacaoResponse,
+)
+from .reuniao_schemas import ReuniaoCreate, ReuniaoUpdate, ReuniaoResponse
 
 __all__ = [
     "authRequest",
@@ -46,4 +53,11 @@ __all__ = [
     "OcorrenciaCreate",
     "OcorrenciaUpdate",
     "OcorrenciaResponse",
+    "SolicitacaoCreate",
+    "SolicitacaoUpdate",
+    "SolicitacaoStatusUpdate",
+    "SolicitacaoResponse",
+    "ReuniaoCreate",
+    "ReuniaoUpdate",
+    "ReuniaoResponse",
 ]

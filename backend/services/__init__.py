@@ -34,6 +34,18 @@ from .ocorrencia_service import (
     get_ocorrencia_service,
     update_ocorrencia_service,
 )
+from .solicitacao_service import (
+    create_solicitacao_service,
+    update_status_service,
+    list_solicitacoes_service,
+    get_solicitacao_service,
+)
+from .reuniao_service import (
+    create_reuniao_service,
+    update_reuniao_service,
+    list_reunioes_service,
+    get_reuniao_service,
+)
 
 __all__ = [
     "login_service",
@@ -63,4 +75,12 @@ __all__ = [
     "list_ocorrencias_service",
     "get_ocorrencia_service",
     "update_ocorrencia_service",
+    "create_solicitacao_service",
+    "update_status_service",
+    "list_solicitacoes_service",
+    "get_solicitacao_service",
+    "create_reuniao_service",
+    "update_reuniao_service",
+    "list_reunioes_service",
+    "get_reuniao_service",
 ]
