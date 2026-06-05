@@ -1,4 +1,4 @@
-import {  useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, ElementType, FormEvent, SetStateAction } from "react";
 import {
   LayoutDashboard,
@@ -23,6 +23,12 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { LoggedInUser } from "./App";
+import { apiClient } from "../services/api";
+import type {
+  Aluno as BackendAluno,
+  Reuniao as BackendReuniao,
+  Ocorrencia as BackendOcorrencia,
+} from "../services/api";
 
 type Screen =
   | "overview"
@@ -80,33 +86,10 @@ interface CareLog {
   text: string;
 }
 
-const STUDENTS: Student[] = [
-  { id: "1", name: "Lucas Henrique Moreira", registration: "2023001", need: "TEA", needColor: "blue", course: "Técnico em Informática", year: "3º Semestre/Matutino", status: "Ativo", alert: true, teachers: ["Camila Rocha"], lastCareDate: "2026-05-22" },
-  { id: "2", name: "Ana Clara Ferreira", registration: "2023045", need: "Deficiência Visual", needColor: "purple", course: "Técnico em Administração", year: "1º Semestre/Matutino", status: "Ativo", teachers: ["Carlos Mendes", "Renata Souza"], lastCareDate: "2026-05-15" },
-  { id: "3", name: "Matheus Souza Costa", registration: "2022088", need: "Altas Habilidades", needColor: "teal", course: "Técnico em Eletrotécnica", year: "3º Semestre/Vespertino", status: "Acompanhamento", teachers: ["Roberto Alves", "Fernanda Costa"], lastCareDate: "2026-04-28" },
-  { id: "4", name: "Isabela Ramos Nunes", registration: "2023112", need: "TDAH", needColor: "amber", course: "Técnico em Química", year: "3º Semestre/Vespertino", status: "Ativo", teachers: ["Camila Rocha", "Diego Faria"], lastCareDate: "2026-04-10" },
-  { id: "5", name: "Gabriel Pereira Lima", registration: "2021034", need: "Deficiência Auditiva", needColor: "indigo", course: "Técnico em Informática", year: "3º Semestre/Matutino", status: "Ativo", teachers: ["Anderson Lima", "Juliana Castro"], lastCareDate: "2026-05-20" },
-  { id: "6", name: "Vitória Almeida Santos", registration: "2023078", need: "Dislexia", needColor: "rose", course: "Técnico em Administração", year: "1º Semestre/Vespertino", status: "Acompanhamento", teachers: ["Carlos Mendes"], lastCareDate: "2026-04-05" },
-];
-
-const INITIAL_CARE_LOGS: CareLog[] = [
-  { id: 1, studentName: "Lucas Henrique Moreira", date: "22 Mai 2026", time: "14:30", type: "Atendimento Individual", staff: "Camila Rocha", text: "Conversa sobre adaptações nas avaliações de Matemática. Aluno demonstrou progresso significativo." },
-  { id: 2, studentName: "Ana Clara Ferreira", date: "15 Mai 2026", time: "10:00", type: "Reunião com Pais", staff: "Coord. Rafael Mendes", text: "Reunião com a mãe para alinhamento de rotina." },
-  { id: 3, studentName: "Lucas Henrique Moreira", date: "08 Mai 2026", time: "09:15", type: "Ocorrência Comportamental", staff: "Juliana Castro", text: "Dificuldade de integração em atividade de grupo." },
-  { id: 4, studentName: "Matheus Souza Costa", date: "28 Abr 2026", time: "11:00", type: "Solicitação de Prorrogação", staff: "Coord. Rafael Mendes", text: "Prorrogação concedida para entrega do TCC." },
-  { id: 5, studentName: "Isabela Ramos Nunes", date: "10 Abr 2026", time: "15:45", type: "Atendimento Individual", staff: "Camila Rocha", text: "Sessão de acompanhamento pedagógico." },
-];
-
-const INITIAL_MEETINGS: MeetingEvent[] = [
-  { id: 1, studentName: "Lucas Henrique Moreira", date: "2026-05-26", time: "14:00", description: "Revisão do PEI semestral.", teachers: ["Profa. Camila Rocha", "Coord. Rafael Mendes"], type: "Revisão de PEI", status: "Concluída", completedBy: "Camila Rocha" },
-  { id: 2, studentName: "Ana Clara Ferreira", date: "2026-05-28", time: "09:30", description: "Adaptação nas provas.", teachers: ["Carlos Mendes"], type: "Atendimento Pedagógico", status: "Agendada" },
-  { id: 3, studentName: "Gabriel Pereira Lima", date: "2026-05-30", time: "10:00", description: "Reunião com família.", teachers: ["Anderson Lima", "Coord. Rafael Mendes"], type: "Reunião com Família", status: "Pendente" },
-];
-
-const INITIAL_OCCURRENCES: Occurrence[] = [
-  { id: 1, studentName: "Lucas Henrique Moreira", subject: "Programação Orientada a Objetos", title: "Dificuldade em atividade em grupo", description: "Aluno apresentou dificuldade de integração durante atividade colaborativa.", date: "08/05/2025", author: "Juliana Castro" },
-  { id: 2, studentName: "Isabela Ramos Nunes", subject: "Química Orgânica", title: "Distração recorrente em aula", description: "Aluna demonstrou dificuldade em manter o foco.", date: "14/05/2025", author: "Diego Faria" },
-];
+const STUDENTS: Student[] = [];
+const INITIAL_CARE_LOGS: CareLog[] = [];
+const INITIAL_MEETINGS: MeetingEvent[] = [];
+const INITIAL_OCCURRENCES: Occurrence[] = [];
 
 const NAV_ITEMS = [
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
@@ -126,6 +109,75 @@ const formatDatePt = (dateTime: string) => {
     month: "short",
     year: "numeric",
   }).replace(".", "");
+};
+
+const needColorFor = (need: string) => {
+  const colors: Record<string, string> = {
+    TEA: "blue",
+    TDAH: "amber",
+    "Deficiência Visual": "purple",
+    "Deficiência Auditiva": "indigo",
+    "Altas Habilidades": "teal",
+    Dislexia: "rose",
+  };
+
+  return colors[need] ?? "green";
+};
+
+const toStudent = (aluno: BackendAluno, currentUserName: string): Student => ({
+  id: String(aluno.id),
+  name: aluno.nome,
+  registration: aluno.matricula,
+  need: aluno.necessidade_especial,
+  needColor: needColorFor(aluno.necessidade_especial),
+  course: aluno.curso,
+  year: aluno.ano,
+  status:
+    aluno.status === "Inativo"
+      ? "Inativo"
+      : aluno.status === "Acompanhamento"
+        ? "Acompanhamento"
+        : "Ativo",
+  teachers: [currentUserName],
+});
+
+const toMeeting = (reuniao: BackendReuniao, currentUserName: string): MeetingEvent => {
+  const [studentLine, ...descriptionLines] = (reuniao.descricao ?? "").split("\n");
+  const studentName = studentLine.startsWith("Aluno: ")
+    ? studentLine.replace("Aluno: ", "").trim()
+    : "Aluno não informado";
+
+  return {
+    id: reuniao.id,
+    studentName,
+    date: reuniao.data,
+    time: reuniao.horario_inicio.slice(0, 5),
+    description: descriptionLines.join("\n").trim(),
+    teachers: [currentUserName],
+    type: reuniao.tipo,
+    status:
+      reuniao.status === "Concluída" || reuniao.status === "Pendente"
+        ? reuniao.status
+        : "Agendada",
+  };
+};
+
+const toOccurrence = (ocorrencia: BackendOcorrencia, currentUserName: string): Occurrence => {
+  const [studentLine, subjectLine, ...descriptionLines] = ocorrencia.descricao.split("\n");
+
+  return {
+    id: ocorrencia.id,
+    studentName: studentLine?.startsWith("Aluno: ")
+      ? studentLine.replace("Aluno: ", "").trim()
+      : "Aluno não informado",
+    subject: subjectLine?.startsWith("Disciplina: ")
+      ? subjectLine.replace("Disciplina: ", "").trim()
+      : "Não especificado",
+    title: ocorrencia.titulo,
+    description: descriptionLines.join("\n").trim() || ocorrencia.descricao,
+    date: new Date(`${ocorrencia.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
+    author: currentUserName,
+  };
 };
 
 const Badge = ({ text, color = "blue" }: { text: string; color?: string }) => {
@@ -419,18 +471,25 @@ function StudentsScreen({
         student.registration.includes(search))
   );
 
-  const handleSaveStudent = () => {
+  const handleSaveStudent = async () => {
     if (!newStudentName.trim() || !newRegistration.trim()) return;
 
+    const savedStudent = await apiClient.createAluno({
+      matricula: newRegistration.trim(),
+      nome: newStudentName.trim(),
+      data_nascimento: "2000-01-01",
+      cpf: `000${newRegistration.trim()}`.slice(-11),
+      telefone: "",
+      curso: newCourse,
+      ano: newYear,
+      necessidade_especial: newNeed,
+      cid: "Não informado",
+      observacao: "",
+    });
+
     const newStudent: Student = {
-      id: String(Date.now()),
-      name: newStudentName.trim(),
-      registration: newRegistration.trim(),
-      need: newNeed,
+      ...toStudent(savedStudent, currentUser.name),
       needColor: needColors[newNeed] ?? "green",
-      course: newCourse,
-      year: newYear,
-      status: "Ativo",
       teachers: [currentUser.name],
       lastCareDate: new Date().toISOString().slice(0, 10),
     };
@@ -1125,13 +1184,22 @@ function MeetingsScreen({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formStudent || !formDate || !formTime) return;
 
     const teachers = Array.from(new Set([...formTeachers, currentUser.name]));
+    const savedMeeting = await apiClient.createReuniao({
+      tipo: formType,
+      descricao: `Aluno: ${formStudent}\n${formDesc}`,
+      data: formDate,
+      horario_inicio: formTime,
+      horario_fim: formTime,
+      turma_id: undefined,
+      usuario_id: undefined,
+    });
 
     const newMeeting: MeetingEvent = {
-      id: Date.now(),
+      id: savedMeeting.id,
       studentName: formStudent,
       date: formDate,
       time: formTime,
@@ -1479,16 +1547,23 @@ function OccurrencesScreen({
     "Redes de Computadores",
   ];
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formStudent || !formTitle || !formDesc) return;
+    const subject = formSubject || "Não especificado";
+    const savedOccurrence = await apiClient.createOcorrencia({
+      titulo: formTitle,
+      descricao: `Aluno: ${formStudent}\nDisciplina: ${subject}\n${formDesc}`,
+      turma_id: undefined,
+      usuario_id: undefined,
+    });
 
     const occurrence: Occurrence = {
-      id: Date.now(),
+      id: savedOccurrence.id,
       studentName: formStudent,
-      subject: formSubject || "Não especificado",
+      subject,
       title: formTitle,
       description: formDesc,
-      date: new Date().toLocaleDateString("pt-BR"),
+      date: new Date(`${savedOccurrence.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
       author: currentUser.name,
     };
 
@@ -1827,6 +1902,34 @@ export default function AcompanhantesApp({
 
   const currentUserName = currentUser.name;
 
+  useEffect(() => {
+    let active = true;
+
+    const loadBackendData = async () => {
+      try {
+        const [backendStudents, backendMeetings, backendOccurrences] = await Promise.all([
+          apiClient.getAlunos(),
+          apiClient.getReunioes(),
+          apiClient.getOcorrencias(),
+        ]);
+
+        if (!active) return;
+
+        setStudents(backendStudents.map((student) => toStudent(student, currentUserName)));
+        setMeetings(backendMeetings.map((meeting) => toMeeting(meeting, currentUserName)));
+        setOccurrences(backendOccurrences.map((occurrence) => toOccurrence(occurrence, currentUserName)));
+      } catch (error) {
+        console.error("Erro ao carregar dados do backend:", error);
+      }
+    };
+
+    loadBackendData();
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserName]);
+
   const visibleStudents = useMemo(
     () =>
       students.filter((student) =>
@@ -1966,3 +2069,6 @@ export default function AcompanhantesApp({
     </div>
   );
 }
+
+
+
