@@ -44,24 +44,6 @@ export interface Ocorrencia {
 
 export type OcorrenciaCreate = Omit<Ocorrencia, "id" | "data_registro">;
 
-export interface Usuario {
-  id: number;
-  siape: string;
-  nome: string;
-  email: string;
-  cargo: string;
-  status: string;
-}
-
-export interface UsuarioCreate {
-  siape: string;
-  nome: string;
-  email: string;
-  cargo: string;
-  senha?: string;
-  status?: string;
-}
-
 export interface LoginRequest {
   siape: number;
   senha: string;
@@ -116,14 +98,6 @@ class ApiClient {
 
   async login(data: LoginRequest): Promise<LoginResponse> {
     return this.request<LoginResponse>("/auth/login", "POST", data);
-  }
-
-  async getUsuarios(): Promise<Usuario[]> {
-    return this.request<Usuario[]>("/usuarios/", "GET");
-  }
-
-  async createUsuario(data: UsuarioCreate): Promise<Usuario> {
-    return this.request<Usuario>("/usuarios/", "POST", data);
   }
 
   // Alunos

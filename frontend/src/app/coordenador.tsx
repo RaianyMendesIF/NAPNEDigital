@@ -13,7 +13,6 @@ import type {
   Aluno as BackendAluno,
   Reuniao as BackendReuniao,
   Ocorrencia as BackendOcorrencia,
-  Usuario as BackendUsuario,
 } from "../services/api";
 
 
@@ -186,21 +185,6 @@ const toOccurrence = (ocorrencia: BackendOcorrencia): Occurrence => {
   };
 };
 
-const toStaffMember = (usuario: BackendUsuario): StaffMember => ({
-  id: String(usuario.id),
-  name: usuario.nome,
-  role:
-    usuario.cargo === "Psiclogo"
-      ? "Psiclogo"
-      : usuario.cargo === "Agente"
-        ? "Agente"
-        : usuario.cargo === "Coordenador"
-          ? "Coordenador"
-          : "Professor",
-  email: usuario.email,
-  siape: usuario.siape,
-  students: [],
-});
 
 
 //  Utility components 
@@ -864,26 +848,24 @@ function CorpoDocenteView({
   const [newEmail, setNewEmail] = useState('');
   const [newSiape, setNewSiape] = useState('');
 
-  const handleAddStaff = async (e: React.FormEvent) => {
+  const handleAddStaff = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newEmail.trim() || !newSiape.trim()) return;
 
-    const savedUser = await apiClient.createUsuario({
-      nome: newName.trim(),
+    const newMember: StaffMember = {
+      id: String(Date.now()),
+      name: newName.trim(),
+      role: newRole,
       email: newEmail.trim(),
       siape: newSiape.trim(),
-      cargo: newRole,
-      senha: "mudar123",
-      status: "Ativo",
-    });
+      students: [],
+    };
 
-    const newMember = toStaffMember(savedUser);
-
-    setStaffList([...staffList, newMember]);
-    setNewName('');
-    setNewEmail('');
-    setNewSiape('');
-    setNewRole('Professor');
+    setStaffList((current) => [...current, newMember]);
+    setNewName("");
+    setNewEmail("");
+    setNewSiape("");
+    setNewRole("Professor");
     setIsModalOpen(false);
   };
 
@@ -2236,11 +2218,10 @@ export default function App({
 
     const loadBackendData = async () => {
       try {
-        const [backendStudents, backendMeetings, backendOccurrences, backendUsuarios] = await Promise.all([
+        const [backendStudents, backendMeetings, backendOccurrences] = await Promise.all([
           apiClient.getAlunos(),
           apiClient.getReunioes(),
           apiClient.getOcorrencias(),
-          apiClient.getUsuarios(),
         ]);
 
         if (!active) return;
@@ -2248,11 +2229,6 @@ export default function App({
         setStudents(backendStudents.map(toStudent));
         setMeetings(backendMeetings.map(toMeeting));
         setOccurrences(backendOccurrences.map(toOccurrence));
-        setStaffList(
-          backendUsuarios
-            .filter((usuario) => usuario.cargo !== "Coordenador")
-            .map(toStaffMember)
-        );
       } catch (error) {
         console.error("Erro ao carregar dados do backend:", error);
       }
@@ -2414,3 +2390,4 @@ export default function App({
     </div>
   );
 }
+

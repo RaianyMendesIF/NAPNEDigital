@@ -1,9 +1,13 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { User, Shield, AlertCircle } from "lucide-react";
 import CoordenadorApp from "./coordenador";
 import AcompanhantesApp from "./acompanhantes";
 
-import { apiClient } from "../services/api";
+const COORDENADORA_INICIAL = {
+  siape: "12345678",
+  senha: "mudar123",
+  name: "Eva Maria Testa Teles",
+};
 
 export interface LoggedInUser {
   siape: string;
@@ -40,7 +44,7 @@ function LoginScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -50,27 +54,24 @@ function LoginScreen({
     }
 
     setLoading(true);
-    try {
-      const response = await apiClient.login({
-        siape: Number(siape.trim()),
-        senha: pass.trim(),
-      });
 
-      if (!response.success || !response.data) {
-        setError(response.message || "SIAPE ou senha inv�lidos");
+    setTimeout(() => {
+      setLoading(false);
+
+      if (
+        siape.trim() !== COORDENADORA_INICIAL.siape ||
+        pass.trim() !== COORDENADORA_INICIAL.senha
+      ) {
+        setError("SIAPE ou senha inválidos");
         return;
       }
 
       onLoginSuccess({
-        siape: response.data.siape,
-        name: response.data.nome,
-        role: response.data.cargo === "Coordenador" ? "coordenador" : "acompanhante",
+        siape: COORDENADORA_INICIAL.siape,
+        name: COORDENADORA_INICIAL.name,
+        role: "coordenador",
       });
-    } catch {
-      setError("Não foi possível conectar ao backend");
-    } finally {
-      setLoading(false);
-    }
+    }, 400);
   };
 
   return (
@@ -202,3 +203,4 @@ function LoginScreen({
     </div>
   );
 }
+

@@ -3,6 +3,7 @@ from utils.responses import success_message, error_message
 from schemas import authRequest
 from models import Usuario
 from core import create_access_token, verify_password
+from core.config import ACCESS_TOKEN_EXPIRE_MINUTES
 
 
 def login_service(user_data: authRequest, db: Session):
@@ -16,9 +17,8 @@ def login_service(user_data: authRequest, db: Session):
         return error_message("Siape ou senha inválidos", 404)
 
     token = create_access_token(
-        {
-            "sub": str(user.id),
-        }
+        {"sub": str(user.id)},
+        expires_minutes=ACCESS_TOKEN_EXPIRE_MINUTES,
     )
 
     return success_message(

@@ -26,4 +26,5 @@ def create_initial_admin_script():
     db.commit()
     db.close()
     
+    print("Coordenador criado com sucesso")
     return True
