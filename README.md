@@ -191,3 +191,42 @@ python app.py
 **Frontend não conecta na API** — verifique se o backend está rodando e se `VITE_API_URL` em `.env.local` aponta para `http://127.0.0.1:8000`.
 
 **Erro nas migrações** — confirme que rodou `alembic upgrade head` dentro de `backend/` com o ambiente virtual ativo.
+
+---
+
+## Colocar o backend no ar (Render — gratuito)
+
+A forma mais simples é usar o [Render](https://render.com) conectado ao seu repositório no GitHub.
+
+### Passo a passo
+
+1. Faça **push** do projeto para o GitHub (incluindo o arquivo `render.yaml` na raiz).
+2. Acesse [render.com](https://render.com) e crie uma conta (pode entrar com GitHub).
+3. Clique em **New +** → **Blueprint**.
+4. Conecte o repositório **NAPNE** e confirme a criação do serviço `napne-api`.
+5. Aguarde o deploy (leva alguns minutos na primeira vez).
+6. Copie a URL gerada, algo como:
+   ```
+   https://napne-api.onrender.com
+   ```
+7. Teste no navegador: `https://napne-api.onrender.com/docs` deve abrir o Swagger.
+8. Na **Vercel**, adicione a variável de ambiente:
+   ```
+   VITE_API_URL = https://napne-api.onrender.com
+   ```
+9. Faça um **redeploy** do frontend na Vercel.
+
+### Login após o deploy
+
+| Campo | Valor |
+|-------|-------|
+| SIAPE | `1234567` |
+| Senha | `mudar123` |
+
+O sistema cria a coordenadora Eva automaticamente na primeira execução.
+
+### Observações
+
+- O plano gratuito do Render **hiberna** após ~15 min sem uso. O primeiro acesso depois disso pode demorar ~30 segundos.
+- O banco usa **SQLite** no servidor. Os dados persistem, mas para produção séria o ideal é migrar para PostgreSQL.
+- Se o domínio da Vercel for outro, atualize `CORS_ORIGINS` no painel do Render (Environment) com a URL correta do frontend.
