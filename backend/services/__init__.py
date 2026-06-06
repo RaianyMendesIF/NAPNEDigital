@@ -1,5 +1,10 @@
 from .auth_service import login_service
-from .user_service import create_user_service, deactivate_user_service, list_users_service
+from .user_service import (
+    create_user_service,
+    deactivate_user_service,
+    list_users_service,
+    update_me_service,
+)
 from .responsavel_service import (
     create_responsavel_service,
     list_responsaveis_service,
@@ -21,7 +26,11 @@ from .turma_service import (
     vincular_professor_service,
     list_professores_turma_service,
 )
-from .documentacao_service import upload_documento, list_documentacoes_service
+from .documentacao_service import (
+    upload_documento,
+    list_documentacoes_service,
+    get_documento_arquivo_service,
+)
 from .atendimento_service import (
     create_atendimento_service,
     list_atendimentos_service,
@@ -53,6 +62,7 @@ __all__ = [
     "create_user_service",
     "deactivate_user_service",
     "list_users_service",
+    "update_me_service",
     "create_responsavel_service",
     "list_responsaveis_service",
     "get_responsavel_service",
@@ -70,6 +80,7 @@ __all__ = [
     "list_professores_turma_service",
     "upload_documento",
     "list_documentacoes_service",
+    "get_documento_arquivo_service",
     "create_atendimento_service",
     "list_atendimentos_service",
     "get_atendimento_service",

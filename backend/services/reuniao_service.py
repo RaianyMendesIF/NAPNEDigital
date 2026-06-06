@@ -3,6 +3,7 @@ from datetime import time
 from sqlalchemy.orm import Session
 
 from models import (
+    Aluno,
     Cargo,
     ProfessorTurma,
     Reuniao,
@@ -29,6 +30,13 @@ def _parse_horario(value: str | None, default: time) -> time:
 def _reuniao_data(reuniao: Reuniao, db: Session) -> dict:
     turma = db.query(Turma).filter(Turma.id == reuniao.turma_id).first()
     status = reuniao.status.value if hasattr(reuniao.status, "value") else reuniao.status
+    usuario_nome = None
+    usuario_cargo = None
+    if reuniao.usuario_id:
+        usuario = db.query(Usuario).filter(Usuario.id == reuniao.usuario_id).first()
+        if usuario:
+            usuario_nome = usuario.nome
+            usuario_cargo = usuario.cargo.value if hasattr(usuario.cargo, "value") else usuario.cargo
     return {
         "id": reuniao.id,
         "turma_id": reuniao.turma_id,
@@ -40,13 +48,48 @@ def _reuniao_data(reuniao: Reuniao, db: Session) -> dict:
         "horario_fim": reuniao.horario_fim.strftime("%H:%M"),
         "status": status,
         "usuario_id": reuniao.usuario_id,
+        "usuario_nome": usuario_nome,
+        "usuario_cargo": usuario_cargo,
     }
+
+
+def _aluno_da_turma_acessivel(turma: Turma, usuario: Usuario, db: Session) -> bool:
+    aluno = db.query(Aluno).filter(Aluno.id == turma.aluno_id).first()
+    if not aluno:
+        return False
+    if usuario.cargo == Cargo.COORDENADOR:
+        return True
+    if usuario.cargo == Cargo.ACOMPANHANTE:
+        return aluno.acompanhante_id == usuario.id
+    return False
+
+
+def _resolver_responsavel_reuniao(
+    data: ReuniaoCreate, usuario: Usuario, db: Session
+) -> int | dict:
+    if usuario.cargo == Cargo.ACOMPANHANTE:
+        return usuario.id
+
+    responsavel_id = data.responsavel_id or usuario.id
+    responsavel = db.query(Usuario).filter(Usuario.id == responsavel_id).first()
+    if not responsavel:
+        return error_message("Responsável não encontrado", 404)
+    if responsavel.cargo not in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
+        return error_message("O responsável deve ser coordenador ou acompanhante", 400)
+    return responsavel_id
 
 
 def create_reuniao_service(data: ReuniaoCreate, usuario: Usuario, db: Session):
     turma = db.query(Turma).filter(Turma.id == data.turma_id).first()
     if not turma:
         return error_message("Turma não encontrada", 404)
+
+    if not _aluno_da_turma_acessivel(turma, usuario, db):
+        return error_message("Sem permissão para agendar reunião deste aluno", 403)
+
+    responsavel_id = _resolver_responsavel_reuniao(data, usuario, db)
+    if isinstance(responsavel_id, dict):
+        return responsavel_id
 
     reuniao = Reuniao(
         turma_id=data.turma_id,
@@ -56,7 +99,7 @@ def create_reuniao_service(data: ReuniaoCreate, usuario: Usuario, db: Session):
         horario_inicio=_parse_horario(data.horario_inicio, DEFAULT_INICIO),
         horario_fim=_parse_horario(data.horario_fim, DEFAULT_FIM),
         status=StatusReuniao.AGENDADA,
-        usuario_id=usuario.id,
+        usuario_id=responsavel_id,
     )
     db.add(reuniao)
     db.commit()
@@ -90,6 +133,15 @@ def update_reuniao_service(reuniao_id: int, data: ReuniaoUpdate, db: Session):
             updates["status"] = StatusReuniao(updates["status"])
         except ValueError:
             return error_message("Status de reunião inválido", 400)
+    if "responsavel_id" in updates:
+        responsavel_id = updates.pop("responsavel_id")
+        if responsavel_id is not None:
+            responsavel = db.query(Usuario).filter(Usuario.id == responsavel_id).first()
+            if not responsavel:
+                return error_message("Acompanhante não encontrado", 404)
+            if responsavel.cargo not in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
+                return error_message("O acompanhante deve ser coordenador ou acompanhante", 400)
+            updates["usuario_id"] = responsavel_id
 
     for field, value in updates.items():
         setattr(reuniao, field, value)
@@ -103,21 +155,16 @@ def update_reuniao_service(reuniao_id: int, data: ReuniaoUpdate, db: Session):
 
 
 def _turmas_visiveis(usuario: Usuario, db: Session) -> list[int] | None:
-    if usuario.cargo in (Cargo.COORDENADOR, Cargo.AGENTE, Cargo.PSICOLOGO):
+    if usuario.cargo == Cargo.COORDENADOR:
         return None
-
-    if usuario.cargo == Cargo.PROFESSOR:
+    if usuario.cargo == Cargo.ACOMPANHANTE:
         rows = (
-            db.query(ProfessorTurma.turma_id)
-            .filter(
-                ProfessorTurma.usuario_id == usuario.id,
-                ProfessorTurma.status == StatusProfessorTurma.ATIVO,
-            )
-            .distinct()
+            db.query(Turma.id)
+            .join(Aluno, Turma.aluno_id == Aluno.id)
+            .filter(Aluno.acompanhante_id == usuario.id)
             .all()
         )
         return [row[0] for row in rows]
-
     return []
 
 

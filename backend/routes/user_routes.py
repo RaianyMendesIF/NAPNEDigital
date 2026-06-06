@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends
-from schemas import UserCreate
+from schemas import UserCreate, UserMeUpdate
 from database import get_db
 from sqlalchemy.orm import Session
 from core import require_admin, get_current_user
-from services import create_user_service, deactivate_user_service, list_users_service
+from services import (
+    create_user_service,
+    deactivate_user_service,
+    list_users_service,
+    update_me_service,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -20,6 +25,7 @@ def get_user_info(current_user: dict = Depends(get_current_user)):
         else current_user.cargo
     )
     return {
+        "id": current_user.id,
         "siape": current_user.siape,
         "nome": current_user.nome,
         "cargo": cargo,
@@ -27,6 +33,15 @@ def get_user_info(current_user: dict = Depends(get_current_user)):
         "status": status,
         "ativo": status == "Ativo",
     }
+
+@router.patch("/me")
+def update_me(
+    data: UserMeUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return update_me_service(current_user, data, db)
+
 
 @router.get("")
 def list_users(

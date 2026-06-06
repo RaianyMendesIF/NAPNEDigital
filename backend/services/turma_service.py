@@ -85,19 +85,6 @@ def create_turma_service(data: TurmaCreate, db: Session):
 def list_turmas_service(db: Session, usuario: Usuario):
     query = db.query(Turma)
 
-    if usuario.cargo == Cargo.PROFESSOR:
-        turma_ids = (
-            db.query(ProfessorTurma.turma_id)
-            .filter(
-                ProfessorTurma.usuario_id == usuario.id,
-                ProfessorTurma.status == StatusProfessorTurma.ATIVO,
-            )
-            .distinct()
-            .all()
-        )
-        ids = [row[0] for row in turma_ids]
-        query = query.filter(Turma.id.in_(ids)) if ids else query.filter(False)
-
     turmas = query.order_by(Turma.ano_letivo.desc(), Turma.id.desc()).all()
     return success_message(
         data=[_turma_data(t) for t in turmas],
@@ -126,11 +113,11 @@ def vincular_professor_service(
     if not professor:
         return error_message("Usuário não encontrado", 404)
 
-    if professor.cargo != Cargo.PROFESSOR:
-        return error_message("Apenas usuários com cargo Professor podem ser vinculados", 400)
+    if professor.cargo != Cargo.ACOMPANHANTE:
+        return error_message("Apenas acompanhantes podem ser vinculados à turma", 400)
 
     if professor.status != StatusUsuario.ATIVO:
-        return error_message("Professor inativo", 400)
+        return error_message("Acompanhante inativo", 400)
 
     status = _parse_status_professor(data.status)
     existing = (

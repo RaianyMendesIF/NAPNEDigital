@@ -1,5 +1,5 @@
 from .auth_schemas import authRequest
-from .user_schemas import UserCreate, UserUpdate, UserResponse
+from .user_schemas import UserCreate, UserUpdate, UserMeUpdate, UserResponse
 from .responsavel_schemas import (
     ResponsavelCreate,
     ResponsavelUpdate,
@@ -35,6 +35,7 @@ __all__ = [
     "authRequest",
     "UserCreate",
     "UserUpdate",
+    "UserMeUpdate",
     "UserResponse",
     "ResponsavelCreate",
     "ResponsavelUpdate",

@@ -4,9 +4,7 @@ from sqlalchemy import Column, Integer, String, Enum
 from database.database import Base
 
 class Cargo(str, enum.Enum):
-    PROFESSOR = "Professor"
-    PSICOLOGO = "Psicólogo"
-    AGENTE = "Agente"
+    ACOMPANHANTE = "Acompanhante"
     COORDENADOR = "Coordenador"
 
 class StatusUsuario(str, enum.Enum):

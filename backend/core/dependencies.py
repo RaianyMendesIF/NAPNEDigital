@@ -1,7 +1,7 @@
 from fastapi.security import OAuth2PasswordBearer
 from core import verify_token
 from fastapi import Depends, HTTPException
-from models import Usuario, StatusUsuario, Cargo, ProfessorTurma, StatusProfessorTurma, Turma
+from models import Usuario, StatusUsuario, Cargo, Turma, Aluno, StatusAluno
 from database import get_db
 from sqlalchemy.orm import Session
 
@@ -37,7 +37,7 @@ def require_admin(current_user: Usuario = Depends(get_current_user)):
 
 
 def require_gestor(current_user: Usuario = Depends(get_current_user)):
-    if current_user.cargo not in (Cargo.COORDENADOR, Cargo.AGENTE):
+    if current_user.cargo not in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
         raise HTTPException(status_code=403, detail="Usuário não autorizado")
     return current_user
 
@@ -45,7 +45,7 @@ def require_gestor(current_user: Usuario = Depends(get_current_user)):
 def require_document_upload_permission(
     current_user: Usuario = Depends(get_current_user),
 ):
-    if current_user.cargo not in (Cargo.COORDENADOR, Cargo.AGENTE):
+    if current_user.cargo not in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
         raise HTTPException(status_code=403, detail="Usuário não autorizado")
     return current_user
 
@@ -53,70 +53,41 @@ def require_document_upload_permission(
 def require_atendimento_permission(
     current_user: Usuario = Depends(get_current_user),
 ):
-    if current_user.cargo not in (Cargo.COORDENADOR, Cargo.PSICOLOGO):
+    if current_user.cargo not in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
         raise HTTPException(status_code=403, detail="Usuário não autorizado")
     return current_user
 
 
 def usuario_pode_registrar_em_turma(usuario: Usuario, turma_id: int, db: Session) -> bool:
-    if usuario.cargo == Cargo.COORDENADOR:
-        return True
-
-    if usuario.cargo != Cargo.PROFESSOR:
-        return False
-
-    vinculo = (
-        db.query(ProfessorTurma)
-        .filter(
-            ProfessorTurma.turma_id == turma_id,
-            ProfessorTurma.usuario_id == usuario.id,
-            ProfessorTurma.status == StatusProfessorTurma.ATIVO,
-        )
-        .first()
-    )
-    return vinculo is not None
+    return usuario.cargo in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE)
 
 
 def ids_alunos_visiveis_usuario(usuario: Usuario, db: Session) -> list[int] | None:
-    if usuario.cargo in (Cargo.COORDENADOR, Cargo.AGENTE, Cargo.PSICOLOGO):
+    if usuario.cargo == Cargo.COORDENADOR:
         return None
-
-    if usuario.cargo == Cargo.PROFESSOR:
+    if usuario.cargo == Cargo.ACOMPANHANTE:
         rows = (
-            db.query(Turma.aluno_id)
-            .join(ProfessorTurma, ProfessorTurma.turma_id == Turma.id)
+            db.query(Aluno.id)
             .filter(
-                ProfessorTurma.usuario_id == usuario.id,
-                ProfessorTurma.status == StatusProfessorTurma.ATIVO,
+                Aluno.acompanhante_id == usuario.id,
+                Aluno.status == StatusAluno.ATIVO,
             )
-            .distinct()
             .all()
         )
         return [row[0] for row in rows]
-
     return []
 
 
 def usuario_tem_acesso_turma(usuario: Usuario, turma_id: int, db: Session) -> bool:
     if usuario.cargo == Cargo.COORDENADOR:
         return True
-
-    if usuario.cargo == Cargo.AGENTE:
-        return True
-
-    if usuario.cargo != Cargo.PROFESSOR:
-        return False
-
-    vinculo = (
-        db.query(ProfessorTurma)
-        .filter(
-            ProfessorTurma.turma_id == turma_id,
-            ProfessorTurma.usuario_id == usuario.id,
-            ProfessorTurma.status == StatusProfessorTurma.ATIVO,
-        )
-        .first()
-    )
-    return vinculo is not None
+    if usuario.cargo == Cargo.ACOMPANHANTE:
+        turma = db.query(Turma).filter(Turma.id == turma_id).first()
+        if not turma:
+            return False
+        aluno = db.query(Aluno).filter(Aluno.id == turma.aluno_id).first()
+        return aluno is not None and aluno.acompanhante_id == usuario.id
+    return False
 
 
 def require_professor_in_turma(
@@ -133,29 +104,12 @@ def require_professor_in_turma(
 
 
 def usuario_pode_ver_prontuario(usuario: Usuario, aluno_id: int, db: Session) -> bool:
-    if usuario.cargo in (Cargo.COORDENADOR, Cargo.AGENTE, Cargo.PSICOLOGO):
+    if usuario.cargo == Cargo.COORDENADOR:
         return True
-
-    if usuario.cargo != Cargo.PROFESSOR:
-        return False
-
-    turma_ids = [
-        row[0]
-        for row in db.query(Turma.id).filter(Turma.aluno_id == aluno_id).all()
-    ]
-    if not turma_ids:
-        return False
-
-    vinculo = (
-        db.query(ProfessorTurma)
-        .filter(
-            ProfessorTurma.usuario_id == usuario.id,
-            ProfessorTurma.turma_id.in_(turma_ids),
-            ProfessorTurma.status == StatusProfessorTurma.ATIVO,
-        )
-        .first()
-    )
-    return vinculo is not None
+    if usuario.cargo == Cargo.ACOMPANHANTE:
+        aluno = db.query(Aluno).filter(Aluno.id == aluno_id).first()
+        return aluno is not None and aluno.acompanhante_id == usuario.id
+    return False
 
 
 def apply_prontuario_permissions(
@@ -169,7 +123,5 @@ def apply_prontuario_permissions(
             detail="Sem permissão para visualizar este prontuário",
         )
     return current_user
-
-
 
 

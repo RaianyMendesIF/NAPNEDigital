@@ -1,6 +1,7 @@
 import shutil
 import uuid
 from datetime import date
+from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -78,6 +79,28 @@ async def upload_documento(
         data=_documentacao_data(documento),
         message="Documento enviado com sucesso",
     )
+
+
+def get_documento_arquivo_service(
+    documentacao_id: int,
+    usuario: Usuario,
+    db: Session,
+) -> tuple[Path, str]:
+    documento = db.query(Documentacao).filter(Documentacao.id == documentacao_id).first()
+    if not documento:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    if not usuario_pode_ver_prontuario(usuario, documento.aluno_id, db):
+        raise HTTPException(
+            status_code=403,
+            detail="Sem permissão para visualizar documentos deste aluno",
+        )
+
+    arquivo_path = DOCUMENTOS_DIR / Path(documento.caminho_arquivo).name
+    if not arquivo_path.exists():
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado no servidor")
+
+    return arquivo_path, documento.nome
 
 
 def list_documentacoes_service(

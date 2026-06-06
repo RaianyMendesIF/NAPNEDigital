@@ -79,21 +79,8 @@ def update_status_service(
 
 
 def _turmas_solicitacao_visiveis(usuario: Usuario, db: Session) -> list[int] | None:
-    if usuario.cargo == Cargo.COORDENADOR:
+    if usuario.cargo in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
         return None
-
-    if usuario.cargo == Cargo.PROFESSOR:
-        rows = (
-            db.query(ProfessorTurma.turma_id)
-            .filter(
-                ProfessorTurma.usuario_id == usuario.id,
-                ProfessorTurma.status == StatusProfessorTurma.ATIVO,
-            )
-            .distinct()
-            .all()
-        )
-        return [row[0] for row in rows]
-
     return []
 
 
@@ -135,7 +122,7 @@ def get_solicitacao_service(solicitacao_id: int, usuario: Usuario, db: Session):
     if not usuario_tem_acesso_turma(usuario, solicitacao.turma_id, db):
         return error_message("Sem acesso a esta solicitação", 403)
 
-    if usuario.cargo not in (Cargo.COORDENADOR, Cargo.PROFESSOR):
+    if usuario.cargo not in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
         return error_message("Sem permissão para visualizar solicitações", 403)
 
     return success_message(

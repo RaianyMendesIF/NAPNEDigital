@@ -1,26 +1,55 @@
 # NAPNE Digital
 
-Plataforma web para gestão administrativa e pedagógica do **Núcleo de Atendimento às Pessoas com Necessidades Educacionais Específicas (NAPNE)** do IFMS Campus Três Lagoas.
-
-O sistema centraliza informações de estudantes atendidos pelo núcleo — atendimentos, ocorrências, reuniões, documentação, solicitações e prontuário — substituindo processos manuais por uma solução digital com controle de acesso por cargo.
+Plataforma web para o **Núcleo de Atendimento às Pessoas com Necessidades Educacionais Específicas (NAPNE)**. O sistema organiza o acompanhamento pedagógico de alunos com necessidades educacionais específicas, reunindo cadastros, prontuário, atendimentos e reuniões em um único lugar.
 
 ---
 
-## Sobre o sistema
+## Sobre o projeto
 
-O NAPNE Digital apoia o trabalho da equipe multidisciplinar (coordenação, agentes, psicólogos e professores) no acompanhamento de alunos com necessidades educacionais específicas.
+Instituições de ensino precisam registrar de forma segura e rastreável o histórico de cada estudante atendido pelo NAPNE — quem acompanha, quais atendimentos foram realizados, o que foi discutido em reuniões e quais documentos estão vinculados ao caso.
 
-**Principais funcionalidades:**
+O NAPNE Digital resolve isso com:
 
-- Autenticação com JWT e perfis por cargo
-- Cadastro de servidores, responsáveis e alunos
-- Gestão de turmas semestrais e vínculo professor ↔ turma
-- Upload de documentação (PEI, laudos, relatórios em PDF)
-- Registro de atendimentos, ocorrências, solicitações e reuniões
-- Prontuário consolidado do aluno com visibilidade conforme o cargo
-- Análise de solicitações pelo coordenador
+- **Banco de dados centralizado** (SQLite em desenvolvimento) em vez de planilhas ou anotações soltas
+- **Dois perfis de usuário** com permissões distintas
+- **Prontuário eletrônico** com linha do tempo de atendimentos
+- **API REST** documentada, consumida por uma interface React
 
-A documentação operacional completa dos fluxos está em [`docs/RELATORIO-FLUXOS-OPERACIONAIS.md`](docs/RELATORIO-FLUXOS-OPERACIONAIS.md).
+---
+
+## Funcionalidades
+
+| Módulo | O que faz |
+|--------|-----------|
+| **Alunos** | Cadastro com dados pessoais, necessidade especial, CID, turma, responsável legal e acompanhante vinculado |
+| **Prontuário** | Visão consolidada do aluno: histórico de atendimentos, documentação e linha do tempo |
+| **Atendimentos** | Registro de sessões com ATA editável após a criação |
+| **Reuniões** | Agendamento, agenda da semana e acompanhamento de status |
+| **Corpo docente** | Cadastro e desativação de coordenadores e acompanhantes *(somente coordenador)* |
+| **Perfil** | Atualização de nome e e-mail, troca de senha; SIAPE não pode ser alterado |
+
+---
+
+## Perfis de acesso
+
+O login é feito com **SIAPE** (7 dígitos) e senha. A sessão usa token JWT.
+
+### Coordenador
+Acesso completo ao sistema: todos os alunos, gestão da equipe, reuniões e atendimentos de qualquer estudante.
+
+### Acompanhante
+Acesso restrito aos alunos **vinculados a ele**. Pode registrar atendimentos, consultar prontuários e participar de reuniões dos seus alunos, mas não gerencia o corpo docente.
+
+---
+
+## Stack
+
+| Camada | Tecnologias |
+|--------|-------------|
+| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Backend | Python, FastAPI, SQLAlchemy, Alembic |
+| Banco | SQLite (`backend/napne.db`) |
+| Autenticação | JWT + bcrypt |
 
 ---
 
@@ -28,97 +57,88 @@ A documentação operacional completa dos fluxos está em [`docs/RELATORIO-FLUXO
 
 ```
 NAPNE/
-├── backend/          # API REST (FastAPI + SQLAlchemy + SQLite)
-├── frontend/         # Interface web (React + Vite)
-└── docs/             # Documentação de fluxos operacionais
+├── backend/
+│   ├── app.py              # Entrada da API
+│   ├── models/             # Entidades do banco (aluno, usuário, reunião…)
+│   ├── routes/             # Endpoints REST
+│   ├── services/           # Regras de negócio
+│   ├── alembic/            # Migrações do banco
+│   └── scripts/            # Utilitários (admin inicial, reset)
+│
+└── frontend/
+    ├── src/app/            # Telas e componentes
+    ├── src/services/api.ts # Cliente HTTP da API
+    └── .env.local          # URL do backend (criar a partir do .env.example)
 ```
-
-| Pasta | Tecnologias |
-|-------|-------------|
-| **backend** | Python, FastAPI, SQLAlchemy, Alembic, JWT, SQLite |
-| **frontend** | React, Vite, Tailwind CSS, Material UI |
 
 ---
 
 ## Pré-requisitos
 
-- **Python 3.11+** (recomendado)
-- **Node.js 18+** e npm (ou pnpm)
-- Git
+- **Python** 3.11 ou superior
+- **Node.js** 18 ou superior (com npm)
+- **Git**
 
 ---
 
-## Como rodar o sistema
+## Como rodar
 
-É necessário subir **backend** e **frontend** em terminais separados.
+O sistema precisa de **dois terminais** abertos ao mesmo tempo: um para a API e outro para a interface.
 
-### 1. Backend (API)
+### Passo 1 — Backend
 
 ```powershell
 cd backend
 
-# Ambiente virtual (recomendado)
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 
-# Dependências
 pip install -r requirements.txt
-
-# Variáveis de ambiente
 copy .env.example .env
 
-# Banco de dados
 alembic upgrade head
-
-# Iniciar servidor
 python app.py
 ```
 
-A API ficará disponível em **http://127.0.0.1:8000**.
+Na primeira execução, o sistema cria automaticamente a coordenadora **Eva Maria Testa Teles**.
 
-- Documentação interativa (Swagger): **http://127.0.0.1:8000/docs**
-- Health check: **http://127.0.0.1:8000/**
+| Serviço | URL |
+|---------|-----|
+| API | http://127.0.0.1:8000 |
+| Documentação Swagger | http://127.0.0.1:8000/docs |
 
-Na primeira execução, o sistema cria automaticamente um usuário coordenador inicial (se ainda não existir).
+### Passo 2 — Frontend
 
-| Campo | Valor padrão (desenvolvimento) |
-|-------|--------------------------------|
-| SIAPE | `1234567` |
-| Senha | `mudar123` |
-
-> Altere a senha após o primeiro acesso em ambiente real.
-
-### 2. Frontend (interface)
+Em um **novo terminal**:
 
 ```powershell
 cd frontend
 
-# Dependências
 npm install
-
-# Variáveis de ambiente
 copy .env.example .env.local
-
-# Servidor de desenvolvimento
 npm run dev
 ```
 
-A interface abre em **http://localhost:5173** (porta padrão do Vite).
+Confirme que `frontend/.env.local` contém:
 
-O frontend aponta para a API via `VITE_API_URL` (padrão: `http://127.0.0.1:8000`). O guia de integração está em [`frontend/docs/INTEGRACAO-BACKEND.md`](frontend/docs/INTEGRACAO-BACKEND.md).
+```env
+VITE_API_URL=http://127.0.0.1:8000
+```
 
----
+| Serviço | URL |
+|---------|-----|
+| Interface | http://localhost:5173 |
 
-## Cargos e permissões (resumo)
+### Passo 3 — Login
 
-| Cargo | Principais ações |
-|-------|------------------|
-| **Coordenador** | Gestão completa: usuários, alunos, turmas, reuniões, análise de solicitações |
-| **Agente** | Apoio operacional: cadastro de alunos e responsáveis, upload de documentos |
-| **Psicólogo** | Registro e consulta de atendimentos, prontuário |
-| **Professor** | Ocorrências e solicitações nas turmas vinculadas, consulta limitada |
+Acesse http://localhost:5173 e entre com a conta inicial:
 
-Não há auto-cadastro público. O primeiro coordenador é criado na instalação; os demais servidores são cadastrados por ele.
+| Campo | Valor |
+|-------|-------|
+| SIAPE | `1234567` |
+| Senha | `mudar123` |
+
+Depois do login, o coordenador pode cadastrar acompanhantes em **Corpo Docente**. Cada membro da equipe acessa o sistema com o próprio SIAPE.
 
 ---
 
@@ -129,40 +149,45 @@ Não há auto-cadastro público. O primeiro coordenador é criado na instalaçã
 | Variável | Descrição | Padrão |
 |----------|-----------|--------|
 | `DATABASE_URL` | Conexão com o banco | `sqlite:///./napne.db` |
-| `SECRET_KEY` | Chave do JWT | *(definir em produção)* |
-| `CORS_ORIGINS` | Origens permitidas do frontend | `http://localhost:5173,...` |
-| `APP_HOST` / `APP_PORT` | Host e porta da API | `127.0.0.1` / `8000` |
+| `SECRET_KEY` | Chave do JWT | *(alterar em produção)* |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Duração do token | `60` |
+| `CORS_ORIGINS` | Origens permitidas do frontend | `http://localhost:5173` |
+| `APP_PORT` | Porta da API | `8000` |
 
 ### Frontend (`frontend/.env.local`)
 
-| Variável | Descrição | Padrão |
-|----------|-----------|--------|
-| `VITE_API_URL` | URL base da API | `http://127.0.0.1:8000` |
+| Variável | Descrição |
+|----------|-----------|
+| `VITE_API_URL` | Endereço base da API |
 
 ---
 
-## Comandos úteis
+## Scripts úteis
+
+**Resetar o banco** — apaga todos os dados de teste e recria apenas a coordenadora Eva:
 
 ```powershell
-# Backend — aplicar migrações após pull
 cd backend
-alembic upgrade head
-
-# Frontend — build de produção
-cd frontend
-npm run build
+.\venv\Scripts\Activate.ps1
+python scripts/reset_database.py
 ```
 
----
-
-## Documentação adicional
-
-- [Fluxos operacionais](docs/RELATORIO-FLUXOS-OPERACIONAIS.md) — regras de negócio e ordem dos fluxos
-- [Integração frontend ↔ backend](frontend/docs/INTEGRACAO-BACKEND.md) — endpoints, autenticação e consumo da API
-- [Swagger / OpenAPI](http://127.0.0.1:8000/docs) — referência viva da API (com o backend rodando)
+Reinicie o backend após o reset (`python app.py`).
 
 ---
 
-## Licença
+## Problemas comuns
 
-Projeto acadêmico/institucional do IFMS Campus Três Lagoas. Consulte a equipe responsável para uso e distribuição.
+**Porta 8000 já em uso**
+
+```powershell
+netstat -ano | findstr ":8000"
+taskkill /PID <pid> /F
+python app.py
+```
+
+**Mudanças no backend não surtem efeito** — o servidor não recarrega sozinho. Pare com `Ctrl+C` e execute `python app.py` de novo.
+
+**Frontend não conecta na API** — verifique se o backend está rodando e se `VITE_API_URL` em `.env.local` aponta para `http://127.0.0.1:8000`.
+
+**Erro nas migrações** — confirme que rodou `alembic upgrade head` dentro de `backend/` com o ambiente virtual ativo.

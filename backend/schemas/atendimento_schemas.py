@@ -8,6 +8,7 @@ class AtendimentoCreate(BaseModel):
     tipo: str = Field(default="Atendimento", min_length=2)
     descricao: str = Field(min_length=3)
     data_atendimento: date | None = None
+    responsavel_id: int | None = None
 
 
 class AtendimentoUpdate(BaseModel):
