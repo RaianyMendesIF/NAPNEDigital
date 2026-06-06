@@ -11,12 +11,13 @@ import { apiClient } from "../services/api";
 import type { LoggedInUser } from "./App";
 import type {
   Aluno as BackendAluno,
+  Atendimento as BackendAtendimento,
   Reuniao as BackendReuniao,
-  Ocorrencia as BackendOcorrencia,
+  Usuario as BackendUsuario,
 } from "../services/api";
 
 
-type Screen = "overview" | "students" | "servers" | "record" | "log" | "meetings" | "occurrences" | "profile";
+type Screen = "overview" | "students" | "servers" | "record" | "log" | "meetings" | "profile";
 type UserRole = "Acompanhadora" | "Coordenadora" | "Admin";
 type MeetingStatus = "Agendada" | "Concluída" | "Pendente";
 
@@ -41,12 +42,14 @@ interface Student {
   teachers: string[];
   lastCareDate?: string; // Data do último atendimento
   editable?: boolean; // Flag para controle de edição
+  companionId?: string;
+  companionName?: string;
 }
 
 interface StaffMember {
   id: string;
   name: string;
-  role: 'Professor' | 'Psiclogo' | 'Agente' | 'Coordenador';
+  role: "Acompanhante" | "Coordenador";
   email: string;
   siape: string;
   students?: Student[];
@@ -65,16 +68,6 @@ interface MeetingEvent {
   completedBy?: string; // Quem completou
 }
 
-interface Occurrence {
-  id: number;
-  studentName: string;
-  subject: string;
-  title: string;
-  description: string;
-  date: string;
-  author: string;
-}
-
 interface CareLog {
   id: number;
   studentName: string;
@@ -84,6 +77,22 @@ interface CareLog {
   staff: string;
   text: string;
 }
+
+type ActivityKind = "student" | "staff" | "meeting" | "care" | "removal";
+
+interface RecentActivity {
+  id: string;
+  kind: ActivityKind;
+  title: string;
+  description: string;
+  actor: string;
+  date: string;
+  time: string;
+  createdAt: string;
+}
+
+type RecentActivityInput = Omit<RecentActivity, "id" | "createdAt" | "date" | "time"> &
+  Partial<Pick<RecentActivity, "id" | "createdAt" | "date" | "time">>;
 
 interface ClassHistory {
   id: string;
@@ -100,7 +109,6 @@ const STUDENTS: Student[] = [];
 const INITIAL_TIMELINE_EVENTS: CareLog[] = [];
 const TIMELINE_EVENTS: CareLog[] = [];
 const INITIAL_MEETINGS: MeetingEvent[] = [];
-const INITIAL_OCCURRENCES: Occurrence[] = [];
 const INITIAL_STAFF: StaffMember[] = [];
 const AVAILABLE_TEACHERS: string[] = [];
 const INITIAL_HISTORY: ClassHistory[] = [];
@@ -167,22 +175,79 @@ const toMeeting = (reuniao: BackendReuniao): MeetingEvent => {
   };
 };
 
-const toOccurrence = (ocorrencia: BackendOcorrencia): Occurrence => {
-  const [studentLine, subjectLine, ...descriptionLines] = ocorrencia.descricao.split("\n");
-
+const dateParts = (dateValue?: string | null) => {
+  const source = dateValue ? new Date(dateValue) : new Date();
+  const valid = Number.isNaN(source.getTime()) ? new Date() : source;
   return {
-    id: ocorrencia.id,
-    studentName: studentLine?.startsWith("Aluno: ")
-      ? studentLine.replace("Aluno: ", "").trim()
-      : "Aluno não informado",
-    subject: subjectLine?.startsWith("Disciplina: ")
-      ? subjectLine.replace("Disciplina: ", "").trim()
-      : "Não especificado",
-    title: ocorrencia.titulo,
-    description: descriptionLines.join("\n").trim() || ocorrencia.descricao,
-    date: new Date(`${ocorrencia.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
-    author: "Sistema",
+    date: valid.toLocaleDateString("pt-BR"),
+    time: valid.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    createdAt: valid.toISOString(),
   };
+};
+
+const toCareLog = (
+  atendimento: BackendAtendimento,
+  studentsById: Map<number, Student>,
+  usersById: Map<number, BackendUsuario>
+): CareLog => {
+  const { date, time } = dateParts(atendimento.data_atendimento);
+  return {
+    id: atendimento.id,
+    studentName: studentsById.get(atendimento.aluno_id)?.name ?? `Aluno #${atendimento.aluno_id}`,
+    date,
+    time,
+    type: atendimento.tipo || "Atendimento",
+    staff: usersById.get(atendimento.usuario_id)?.nome ?? `Servidor #${atendimento.usuario_id}`,
+    text: atendimento.descricao ?? "",
+  };
+};
+
+const activityFromCareLog = (log: CareLog): RecentActivity => ({
+  id: `care-${log.id}`,
+  kind: "care",
+  title: `${log.type} registrado`,
+  description: `${log.studentName}${log.text ? ` - ${log.text}` : ""}`,
+  actor: log.staff,
+  date: log.date,
+  time: log.time,
+  createdAt: `${log.date.split("/").reverse().join("-")}T${log.time || "00:00"}:00`,
+});
+
+const activityFromMeeting = (meeting: MeetingEvent): RecentActivity => ({
+  id: `meeting-${meeting.id}`,
+  kind: "meeting",
+  title: `${meeting.type} agendada`,
+  description: `${meeting.studentName}${meeting.description ? ` - ${meeting.description}` : ""}`,
+  actor: "Coordenação",
+  date: meeting.date.split("-").reverse().join("/"),
+  time: meeting.time,
+  createdAt: `${meeting.date}T${meeting.time || "00:00"}:00`,
+});
+
+const toStaffMember = (usuario: BackendUsuario): StaffMember | null => {
+  if (usuario.cargo === "Coordenador") {
+    return {
+      id: String(usuario.id),
+      name: usuario.nome,
+      role: "Coordenador",
+      email: usuario.email,
+      siape: usuario.siape,
+      students: [],
+    };
+  }
+
+  if (usuario.cargo === "Agente") {
+    return {
+      id: String(usuario.id),
+      name: usuario.nome,
+      role: "Acompanhante",
+      email: usuario.email,
+      siape: usuario.siape,
+      students: [],
+    };
+  }
+
+  return null;
 };
 
 
@@ -253,18 +318,29 @@ const NAV_ITEMS = [
   { id: "servers", label: "Corpo Docente", icon: Users },
   { id: "log", label: "Atendimentos", icon: Activity },
   { id: "meetings", label: "Reuniões", icon: CalendarDays },
-  { id: "occurrences", label: "Ocorrências", icon: AlertTriangle },
 ];
 
 function Sidebar({
   current,
   onNav,
   onLogout,
+  currentUser,
+  studentCount,
 }: {
   current: string;
   onNav: (s: Screen) => void;
   onLogout: () => void;
+  currentUser: User;
+  studentCount: number;
 }) {
+  const initials = currentUser.name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
   return (
     <aside className="w-60 flex-shrink-0 flex flex-col h-screen sticky top-0" style={{ background: "var(--sidebar)" }}>
       <div className="px-5 py-5 border-b" style={{ borderColor: "var(--sidebar-border)" }}>
@@ -295,7 +371,7 @@ function Sidebar({
                 >
                   <Icon size={16} className={active ? "" : "opacity-60 group-hover:opacity-100"} style={active ? { color: "var(--accent)" } : {}} />
                   {label}
-                  {id === "students" && <span className="ml-auto text-[10px] font-mono text-white px-1.5 py-0.5 rounded" style={{ background: "var(--accent)" }}>6</span>}
+                  {id === "students" && <span className="ml-auto text-[10px] font-mono text-white px-1.5 py-0.5 rounded" style={{ background: "var(--accent)" }}>{studentCount}</span>}
                 </button>
               </li>
             );
@@ -305,10 +381,10 @@ function Sidebar({
       <div className="px-3 pb-4">
         <div className="flex items-center gap-2.5 p-2.5 rounded-md" style={{ background: "var(--sidebar-accent)" }}>
           <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--accent)" }}>
-            <span className="text-white text-xs font-bold">RM</span>
+            <span className="text-white text-xs font-bold">{initials || "EM"}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-white text-xs font-semibold leading-tight truncate">Usurio</p>
+            <p className="text-white text-xs font-semibold leading-tight truncate">{currentUser.name || "Eva Maria"}</p>
             <p className="text-[10px] leading-tight" style={{ color: "var(--sidebar-foreground)" }}>Coordenador NAPNE</p>
           </div>
           <button
@@ -324,8 +400,16 @@ function Sidebar({
 }
 
 //  Topbar 
-function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => void }) {
+function Topbar({ title, onOpenProfile, currentUser }: { title: string; onOpenProfile: () => void; currentUser: User }) {
   const [notifOpen, setNotifOpen] = useState(false);
+  const initials = currentUser.name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
   return (
     <header className="bg-card border-b border-border px-6 py-3.5 flex items-center justify-between sticky top-0 z-10">
       <div>
@@ -359,10 +443,10 @@ function Topbar({ title, onOpenProfile }: { title: string; onOpenProfile: () => 
         </div>
         <button onClick={onOpenProfile} className="flex items-center gap-2 pl-3 border-l border-border hover:bg-secondary/50 transition-colors rounded-lg py-1 pr-2">
           <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "var(--primary)" }}>
-            <span className="text-white text-xs font-bold">RM</span>
+            <span className="text-white text-xs font-bold">{initials || "EM"}</span>
           </div>
           <div className="hidden sm:block">
-            <p className="text-xs font-semibold text-foreground leading-tight">Usurio</p>
+            <p className="text-xs font-semibold text-foreground leading-tight">{currentUser.name || "Eva Maria"}</p>
             <p className="text-[10px] text-muted-foreground leading-tight">Coordenador</p>
           </div>
           <ChevronDown size={14} className="text-muted-foreground" />
@@ -500,20 +584,23 @@ function OverviewScreen({
   students,
   meetings,
   careLogs,
-  occurrences,
+  recentActivities,
   onNav,
 }: {
   students: Student[];
   meetings: MeetingEvent[];
   careLogs: CareLog[];
-  occurrences: Occurrence[];
+  recentActivities: RecentActivity[];
   onNav: (s: Screen) => void;
 }) {
+  const [showPendingCareModal, setShowPendingCareModal] = useState(false);
   const activeStudents = students.filter((student) => student.status === "Ativo").length;
-  const pendingCareLogs = students.filter(
+  const studentsPendingCare = students.filter(
     (student) => !careLogs.some((log) => log.studentName === student.name)
-  ).length;
+  );
+  const pendingCareLogs = studentsPendingCare.length;
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const startOfWeek = new Date(today);
   startOfWeek.setDate(today.getDate() - today.getDay());
   startOfWeek.setHours(0, 0, 0, 0);
@@ -528,6 +615,44 @@ function OverviewScreen({
   const nextMeeting = [...meetings]
     .filter((meeting) => new Date(`${meeting.date}T${meeting.time || "00:00"}`) >= today)
     .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0];
+  const overdueMeetings = meetings.filter((meeting) => {
+    const meetingDate = new Date(`${meeting.date}T${meeting.time || "00:00"}`);
+    return meetingDate < today && meeting.status !== "Concluída";
+  });
+  const studentsWithoutPei = students.filter(
+    (student) => !careLogs.some((log) =>
+      log.studentName === student.name &&
+      `${log.type} ${log.text}`.toLowerCase().includes("pei")
+    )
+  );
+  const studentsWithDocumentPending = students.filter((student) => student.alert);
+  const criticalAlerts = [
+    ...overdueMeetings.map((meeting) => ({
+      id: `meeting-${meeting.id}`,
+      title: `${meeting.type} não realizada`,
+      description: `${meeting.studentName} - ${meeting.date.split("-").reverse().join("/")} às ${meeting.time}`,
+    })),
+    ...studentsWithoutPei.map((student) => ({
+      id: `pei-${student.id}`,
+      title: student.name,
+      description: "Adicionar documento de PEI",
+    })),
+    ...studentsWithDocumentPending.map((student) => ({
+      id: `doc-${student.id}`,
+      title: student.name,
+      description: "Pendência de documento",
+    })),
+  ];
+  const sortedActivities = [...recentActivities]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 8);
+  const activityIcon = (kind: ActivityKind) => {
+    if (kind === "student") return <Users size={14} className="text-emerald-600" />;
+    if (kind === "staff") return <Shield size={14} className="text-blue-600" />;
+    if (kind === "meeting") return <CalendarDays size={14} className="text-indigo-600" />;
+    if (kind === "removal") return <Trash2 size={14} className="text-red-600" />;
+    return <Activity size={14} className="text-amber-600" />;
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -540,7 +665,7 @@ function OverviewScreen({
             color="bg-primary"
             onClick={() => onNav("students")}
       />
-        <KpiCard icon={Clock} label="Atend. Pendentes" value={pendingCareLogs} sub="Aguardando registro" color="bg-amber-500" />
+        <KpiCard icon={Clock} label="Atend. Pendentes" value={pendingCareLogs} sub="Aguardando registro" color="bg-amber-500" onClick={() => setShowPendingCareModal(true)} />
         <KpiCard icon={FileText} label="Prorrogações" value={0} sub="Sem dados cadastrados" color="bg-teal-600" />
         <KpiCard
           icon={CalendarDays}
@@ -559,27 +684,24 @@ function OverviewScreen({
             <button className="text-xs font-medium hover:underline" style={{ color: "var(--accent)" }}>Ver todas</button>
           </div>
           <ul className="divide-y divide-border">
-            {careLogs.slice(0, 4).map((ev, i) => (
-              <li key={i} className="px-5 py-3.5 flex gap-4 hover:bg-secondary/30 transition-colors">
+            {sortedActivities.map((activity) => (
+              <li key={activity.id} className="px-5 py-3.5 flex gap-4 hover:bg-secondary/30 transition-colors">
                 <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {ev.type.includes("Ocorrência") ? <AlertTriangle size={14} className="text-amber-500" /> :
-                   ev.type.includes("Reunião") ? <CalendarDays size={14} className="text-blue-500" /> :
-                   ev.type.includes("Prorrogação") ? <Clock size={14} className="text-teal-500" /> :
-                   <Activity size={14} className="text-indigo-500" />}
+                  {activityIcon(activity.kind)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs font-semibold text-foreground">Nenhum aluno cadastrado</p>
-                      <p className="text-xs text-muted-foreground">{ev.type} · {ev.staff}</p>
+                      <p className="text-xs font-semibold text-foreground">{activity.title}</p>
+                      <p className="text-xs text-muted-foreground">{activity.actor}</p>
                     </div>
-                    <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{ev.date}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{activity.date} · {activity.time}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{ev.text}</p>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{activity.description}</p>
                 </div>
               </li>
             ))}
-            {careLogs.length === 0 && (
+            {sortedActivities.length === 0 && (
               <li className="px-5 py-8 text-center text-sm text-muted-foreground">
                 Nenhuma atividade cadastrada.
               </li>
@@ -592,20 +714,20 @@ function OverviewScreen({
             <div className="px-4 py-3.5 border-b border-border flex items-center gap-2">
               <AlertCircle size={15} className="text-red-500" />
               <h2 className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Alertas Críticos</h2>
-              <span className="ml-auto font-mono text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded">{occurrences.length}</span>
+              <span className="ml-auto font-mono text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded">{criticalAlerts.length}</span>
             </div>
-            {occurrences.slice(0, 2).map((a, i) => (
-              <div key={i} className="px-4 py-3 flex items-start gap-2.5 border-b border-border last:border-0">
+            {criticalAlerts.slice(0, 5).map((alert) => (
+              <div key={alert.id} className="px-4 py-3 flex items-start gap-2.5 border-b border-border last:border-0">
                 <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-red-500" />
                 <div>
-                  <p className="text-xs font-medium text-foreground">{a.studentName}</p>
-                  <p className="text-xs text-muted-foreground">{a.title}</p>
+                  <p className="text-xs font-medium text-foreground">{alert.title}</p>
+                  <p className="text-xs text-muted-foreground">{alert.description}</p>
                 </div>
               </div>
             ))}
-            {occurrences.length === 0 && (
+            {criticalAlerts.length === 0 && (
               <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-                Nenhum alerta cadastrado.
+                Nenhum alerta crítico no momento.
               </div>
             )}
           </div>
@@ -635,6 +757,35 @@ function OverviewScreen({
           </button>
         </div>
       </div>
+
+      {showPendingCareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(13,28,54,0.7)" }}>
+          <div className="bg-card rounded-xl border border-border w-full max-w-lg shadow-2xl">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Atendimentos Pendentes</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Alunos aguardando o primeiro registro de atendimento.</p>
+              </div>
+              <button onClick={() => setShowPendingCareModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"><X size={16} className="text-muted-foreground" /></button>
+            </div>
+            <div className="max-h-96 overflow-y-auto divide-y divide-border">
+              {studentsPendingCare.length > 0 ? studentsPendingCare.map((student) => (
+                <div key={student.id} className="px-6 py-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{student.name}</p>
+                    <p className="text-xs text-muted-foreground">{student.course} - {student.year}</p>
+                  </div>
+                  <Badge text="Aguardando registro" color="amber" />
+                </div>
+              )) : (
+                <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+                  Nenhum atendimento pendente.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -643,14 +794,20 @@ function OverviewScreen({
 function StudentsScreen({
   students,
   setStudents,
+  staffList,
+  setStaffList,
   onSelectStudent,
+  onActivity,
 }: {
   students: Student[];
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
+  staffList: StaffMember[];
+  setStaffList: React.Dispatch<React.SetStateAction<StaffMember[]>>;
   onSelectStudent: (id: string) => void;
+  onActivity: (activity: RecentActivityInput) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [filterNeed, setFilterNeed] = useState("Todas");
+  const [filterCourse, setFilterCourse] = useState("Todos");
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState(1);
 
@@ -659,15 +816,22 @@ function StudentsScreen({
   const [newCourse, setNewCourse] = useState("Técnico em Informática");
   const [newYear, setNewYear] = useState("1º Ano");
   const [newNeed, setNewNeed] = useState("TEA");
+  const [newCompanionId, setNewCompanionId] = useState("");
+  const [removingStudentId, setRemovingStudentId] = useState<string | null>(null);
+  const [requestMessage, setRequestMessage] = useState("");
 
   const needs = ["Todas", "TEA", "TDAH", "Deficiência Visual", "Deficiência Auditiva", "Altas Habilidades", "Dislexia"];
+  const courseFilters = ["Todos", "Técnico em Informática", "Técnico em Eletrotécnica"];
+  const companions = staffList.filter((member) => member.role === "Acompanhante");
   const filtered = students.filter(s =>
-    (filterNeed === "Todas" || s.need === filterNeed) &&
+    (filterCourse === "Todos" || s.course === filterCourse) &&
     (s.name.toLowerCase().includes(search.toLowerCase()) || s.registration.includes(search))
   );
 
   const handleSaveStudent = async () => {
+    setRequestMessage("");
     if (!newStudentName.trim() || !newRegistration.trim()) return;
+    const selectedCompanion = companions.find((member) => member.id === newCompanionId);
     const savedStudent = await apiClient.createAluno({
       matricula: newRegistration.trim(),
       nome: newStudentName.trim(),
@@ -684,18 +848,60 @@ function StudentsScreen({
     const newStudent: Student = {
       ...toStudent(savedStudent),
       needColor: needColorFor(newNeed),
-      teachers: [],
+      teachers: selectedCompanion ? [selectedCompanion.name] : [],
+      companionId: selectedCompanion?.id,
+      companionName: selectedCompanion?.name,
     };
 
     setStudents(prev => [...prev, newStudent]);
+    onActivity({
+      kind: "student",
+      title: "Aluno adicionado",
+      description: `${newStudent.name} - ${newStudent.course} ${newStudent.year}`,
+      actor: "Coordenação",
+    });
+    if (selectedCompanion) {
+      setStaffList(prev => prev.map((member) =>
+        member.id === selectedCompanion.id
+          ? { ...member, students: [...(member.students ?? []), newStudent] }
+          : member
+      ));
+    }
 
     setNewStudentName("");
     setNewRegistration("");
     setNewCourse("Técnico em Informática");
     setNewYear("1º Ano");
     setNewNeed("TEA");
+    setNewCompanionId("");
     setShowModal(false);
     setModalStep(1);
+  };
+
+  const handleRemoveStudent = async (student: Student) => {
+    const confirmed = window.confirm(`Remover o aluno ${student.name}? Ele deixara de aparecer nas listagens ativas.`);
+    if (!confirmed) return;
+
+    setRequestMessage("");
+    setRemovingStudentId(student.id);
+    try {
+      await apiClient.deleteAluno(Number(student.id));
+      setStudents(prev => prev.filter((current) => current.id !== student.id));
+      setStaffList(prev => prev.map((member) => ({
+        ...member,
+        students: member.students?.filter((current) => current.id !== student.id),
+      })));
+      onActivity({
+        kind: "removal",
+        title: "Aluno removido",
+        description: `${student.name} saiu das listagens ativas`,
+        actor: "Coordenação",
+      });
+    } catch (error) {
+      setRequestMessage(error instanceof Error ? error.message : "Erro ao remover aluno");
+    } finally {
+      setRemovingStudentId(null);
+    }
   };
 
   return (
@@ -708,8 +914,8 @@ function StudentsScreen({
         <div className="flex items-center gap-2">
           <div className="relative">
             <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <select value={filterNeed} onChange={e => setFilterNeed(e.target.value)} className="pl-9 pr-8 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring appearance-none cursor-pointer">
-              {needs.map(n => <option key={n}>{n}</option>)}
+            <select value={filterCourse} onChange={e => setFilterCourse(e.target.value)} className="pl-9 pr-8 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring appearance-none cursor-pointer">
+              {courseFilters.map(course => <option key={course}>{course}</option>)}
             </select>
           </div>
           <button onClick={() => { setShowModal(true); setModalStep(1); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white whitespace-nowrap transition-all hover:opacity-90" style={{ background: "var(--accent)" }}>
@@ -720,7 +926,10 @@ function StudentsScreen({
 
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
-          <p className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Estudantes Cadastrados</p>
+          <div>
+            <p className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Estudantes Cadastrados</p>
+            {requestMessage && <p className="text-xs text-red-600 mt-1">{requestMessage}</p>}
+          </div>
           <span className="font-mono text-xs text-muted-foreground">{filtered.length} resultado{filtered.length !== 1 && "s"}</span>
         </div>
         <div className="overflow-x-auto">
@@ -754,9 +963,20 @@ function StudentsScreen({
                   <td className="px-5 py-3.5 text-xs text-muted-foreground font-mono">{s.year}</td>
                   <td className="px-5 py-3.5"><StatusBadge status={s.status} /></td>
                   <td className="px-5 py-3.5">
-                    <button onClick={() => onSelectStudent(s.id)} className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md hover:bg-secondary" style={{ color: "var(--accent)" }}>
-                      <Eye size={13} /> Prontuário
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => onSelectStudent(s.id)} className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md hover:bg-secondary" style={{ color: "var(--accent)" }}>
+                        <Eye size={13} /> Prontuário
+                      </button>
+                      <button
+                        onClick={() => handleRemoveStudent(s)}
+                        disabled={removingStudentId === s.id}
+                        title="Remover aluno"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-8 h-8 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label={`Remover aluno ${s.name}`}
+                      >
+                        {removingStudentId === s.id ? <Clock size={13} /> : <Trash2 size={13} />}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -802,9 +1022,10 @@ function StudentsScreen({
               )}
               {modalStep === 2 && (
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Curso *</label><select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>Técnico em Informática</option><option>Técnico em Eletrotécnica</option></select></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Ano / Turma *</label><select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>1º Ano</option><option>2º Ano</option><option>3º Ano</option></select></div>
-                  <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">NEE *</label><select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">{needs.slice(1).map(n => <option key={n}>{n}</option>)}</select></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Curso *</label><select value={newCourse} onChange={e => setNewCourse(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>Técnico em Informática</option><option>Técnico em Eletrotécnica</option></select></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Ano / Turma *</label><select value={newYear} onChange={e => setNewYear(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>1º Ano</option><option>2º Ano</option><option>3º Ano</option></select></div>
+                  <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">NEE *</label><select value={newNeed} onChange={e => setNewNeed(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">{needs.slice(1).map(n => <option key={n}>{n}</option>)}</select></div>
+                  <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">Acompanhante</label><select value={newCompanionId} onChange={e => setNewCompanionId(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option value="">Selecione um acompanhante...</option>{companions.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></div>
                   <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">CID-10</label><input placeholder="Ex: F84.0" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
@@ -832,44 +1053,65 @@ function StudentsScreen({
 function CorpoDocenteView({
   staffList,
   setStaffList,
+  onActivity,
 }: {
   staffList: StaffMember[];
   setStaffList: React.Dispatch<React.SetStateAction<StaffMember[]>>;
+  onActivity: (activity: RecentActivityInput) => void;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<string>('Todos');
+  const [selectedFilter, setSelectedFilter] = useState<"Todos" | "Acompanhante" | "Coordenador">("Todos");
   
   // Estado para controlar a navegação interna do perfil
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 
   // Estados para o formulário de cadastro
   const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState<StaffMember['role']>('Professor');
+  const [newRole] = useState<StaffMember['role']>('Acompanhante');
   const [newEmail, setNewEmail] = useState('');
   const [newSiape, setNewSiape] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [requestMessage, setRequestMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleAddStaff = (e: React.FormEvent) => {
+  const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || !newEmail.trim() || !newSiape.trim()) return;
+    setRequestMessage("");
+    if (!newName.trim() || !newEmail.trim() || !newSiape.trim() || !newPassword.trim()) return;
 
-    const newMember: StaffMember = {
-      id: String(Date.now()),
-      name: newName.trim(),
-      role: newRole,
-      email: newEmail.trim(),
-      siape: newSiape.trim(),
-      students: [],
-    };
+    try {
+      setIsSaving(true);
+      const created = await apiClient.createUsuario({
+        nome: newName.trim(),
+        cargo: "Agente",
+        email: newEmail.trim(),
+        siape: newSiape.trim(),
+        senha: newPassword.trim(),
+      });
 
-    setStaffList((current) => [...current, newMember]);
-    setNewName("");
-    setNewEmail("");
-    setNewSiape("");
-    setNewRole("Professor");
-    setIsModalOpen(false);
+      const member = toStaffMember(created);
+      if (member) {
+        setStaffList((current) => [...current, member]);
+        onActivity({
+          kind: "staff",
+          title: "Novo membro adicionado",
+          description: `${member.name} - ${member.role}`,
+          actor: "Coordenação",
+        });
+      }
+      setNewName("");
+      setNewEmail("");
+      setNewSiape("");
+      setNewPassword("");
+      setIsModalOpen(false);
+    } catch (error) {
+      setRequestMessage(error instanceof Error ? error.message : "Erro ao cadastrar usuário");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const filteredStaff = selectedFilter === 'Todos' 
+  const filteredStaff = selectedFilter === 'Todos'
     ? staffList 
     : staffList.filter(member => member.role === selectedFilter);
 
@@ -982,7 +1224,7 @@ function CorpoDocenteView({
 
       {/* Filtro por Tipo de Usuário */}
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {['Todos', 'Responsável', 'Psicólogo', 'Agente', 'Coordenador NAPNE'].map((filter) => (
+        {(["Todos", "Acompanhante", "Coordenador"] as const).map((filter) => (
           <button
             key={filter}
             onClick={() => setSelectedFilter(filter)}
@@ -992,7 +1234,7 @@ function CorpoDocenteView({
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            {filter}
+            {filter === "Acompanhante" ? "Acompanhantes" : filter}
           </button>
         ))}
       </div>
@@ -1023,9 +1265,7 @@ function CorpoDocenteView({
                   </td>
                   <td className="py-4 px-6">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      member.role === 'Coordenador SINAPNE' ? 'bg-purple-100 text-purple-700' :
-                      member.role === 'Psicólogo' ? 'bg-teal-100 text-teal-700' :
-                      member.role === 'Agente' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                      member.role === 'Coordenador' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'
                     }`}>
                       {member.role}
                     </span>
@@ -1079,15 +1319,9 @@ function CorpoDocenteView({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Usuário</label>
-                  <select 
-                    value={newRole}
-                    onChange={(e) => setNewRole(e.target.value as StaffMember['role'])}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Professor">Professor(a)</option>
-                    <option value="Psiclogo">Psiclogo(a)</option>
-                    <option value="Agente">Agente</option>
-                  </select>
+                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700">
+                    Acompanhante
+                  </div>
                 </div>
               </div>
 
@@ -1103,6 +1337,24 @@ function CorpoDocenteView({
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Senha inicial</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo de 8 caracteres"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              {requestMessage && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                  {requestMessage}
+                </div>
+              )}
+
               <div className="flex justify-end space-x-2 pt-2">
                 <button 
                   type="button" 
@@ -1113,9 +1365,10 @@ function CorpoDocenteView({
                 </button>
                 <button 
                   type="submit" 
+                  disabled={isSaving}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
                 >
-                  Salvar
+                  {isSaving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>
@@ -1204,12 +1457,11 @@ function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAdd
 
 
 ///  SCREEN: Student Record 
-function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOccurrence }: {
-  studentId: string;
+function StudentRecord({ student, onBack, onLog, onScheduleMeeting }: {
+  student: Student;
   onBack: () => void;
   onLog: () => void;
   onScheduleMeeting: (student: Student) => void;
-  onCreateOccurrence: (student: Student) => void;
 }) {
   // 1. Atualizado o Estado da Tab para incluir "classes"
   const [tab, setTab] = useState<"timeline" | "pei" | "requests" | "classes">("timeline");
@@ -1289,12 +1541,6 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-border hover:bg-secondary transition-colors whitespace-nowrap text-foreground"
               >
                 <CalendarDays size={13} /> Agendar Reunião
-              </button>
-              <button
-                onClick={() => onCreateOccurrence(student)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-border hover:bg-secondary transition-colors whitespace-nowrap text-foreground"
-              >
-                <AlertTriangle size={13} /> Nova Ocorrência
               </button>
             </div>
           </div>
@@ -1529,10 +1775,55 @@ function StudentRecord({ studentId, onBack, onLog, onScheduleMeeting, onCreateOc
 }
 
 //  SCREEN: Log Interaction 
-function LogScreen({ onBack }: { onBack: () => void }) {
+function LogScreen({
+  onBack,
+  currentUser,
+  student,
+  setCareLogs,
+  onActivity,
+}: {
+  onBack: () => void;
+  currentUser: User;
+  student: Student;
+  setCareLogs: React.Dispatch<React.SetStateAction<CareLog[]>>;
+  onActivity: (activity: RecentActivityInput) => void;
+}) {
   const [dragOver, setDragOver] = useState(false);
   const [saved, setSaved] = useState(false);
-  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 3000); };
+  const [interactionType, setInteractionType] = useState("Atendimento Individual");
+  const [interactionDate, setInteractionDate] = useState(new Date().toISOString().slice(0, 16));
+  const [description, setDescription] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+
+  const handleSave = async () => {
+    if (!description.trim()) return;
+    setRequestMessage("");
+    try {
+      const savedLog = await apiClient.createAtendimento({
+        aluno_id: Number(student.id),
+        tipo: interactionType,
+        descricao: description.trim(),
+        data_atendimento: interactionDate,
+      });
+      const { date, time } = dateParts(savedLog.data_atendimento ?? interactionDate);
+      const newLog: CareLog = {
+        id: savedLog.id,
+        studentName: student.name,
+        date,
+        time,
+        type: savedLog.tipo || interactionType,
+        staff: currentUser.name || "Coordenação",
+        text: savedLog.descricao ?? description.trim(),
+      };
+      setCareLogs((current) => [newLog, ...current]);
+      onActivity(activityFromCareLog(newLog));
+      setSaved(true);
+      setDescription("");
+      setTimeout(() => setSaved(false), 3000);
+    } catch (error) {
+      setRequestMessage(error instanceof Error ? error.message : "Erro ao registrar atendimento");
+    }
+  };
 
   return (
     <div className="p-6">
@@ -1544,28 +1835,29 @@ function LogScreen({ onBack }: { onBack: () => void }) {
           </div>
           <div className="p-6 space-y-5">
             {saved && <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium"><CheckCircle size={16} /> Registro salvo com sucesso!</div>}
+            {requestMessage && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-medium"><AlertCircle size={16} /> {requestMessage}</div>}
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
-                <select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">{([] as Student[]).map(s => <option key={s.id}>{s.name}  #{s.registration}</option>)}</select>
+                <div className="w-full px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground">{student.name}  #{student.registration}</div>
               </div>
               <div>
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Tipo de Interação *</label>
-                <select className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+                <select value={interactionType} onChange={e => setInteractionType(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                   {["Atendimento Individual", "Reunião com Pais", "Incidente Acadêmico", "Ocorrência Comportamental", "Revisão de PEI", "Contato Telefônico"].map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Data e Hora *</label>
-                <input type="datetime-local" defaultValue={new Date().toISOString().slice(0, 16)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+                <input type="datetime-local" value={interactionDate} onChange={e => setInteractionDate(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Servidor Responsável</label>
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground"><Shield size={14} /><span>Usurio  Coordenador NAPNE</span><span className="ml-auto text-[10px] font-mono bg-secondary px-1.5 py-0.5 rounded">Somente leitura</span></div>
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground"><Shield size={14} /><span>{currentUser.name || "Eva Maria"} - Coordenador NAPNE</span><span className="ml-auto text-[10px] font-mono bg-secondary px-1.5 py-0.5 rounded">Somente leitura</span></div>
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Relato Descritivo *</label>
-                <textarea rows={6} placeholder="Descreva detalhadamente o atendimento, observações do aluno, estratégias utilizadas e próximos passos..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none leading-relaxed" />
+                <textarea rows={6} value={description} onChange={e => setDescription(e.target.value)} placeholder="Descreva detalhadamente o atendimento, observações do aluno, estratégias utilizadas e próximos passos..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none leading-relaxed" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Documentos Anexos</label>
@@ -1591,11 +1883,12 @@ function LogScreen({ onBack }: { onBack: () => void }) {
 const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
+function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students, onActivity }: {
   meetings: MeetingEvent[];
   setMeetings: React.Dispatch<React.SetStateAction<MeetingEvent[]>>;
   prefilledStudent: Student | null;
   students: Student[];
+  onActivity: (activity: RecentActivityInput) => void;
 }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -1646,6 +1939,12 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
       type: formType,
     };
     setMeetings(prev => [...prev, newMeeting]);
+    onActivity({
+      kind: "meeting",
+      title: `${formType} agendada`,
+      description: `${formStudent}${formDesc ? ` - ${formDesc}` : ""}`,
+      actor: "Coordenação",
+    });
     setSaved(true);
     setTimeout(() => { setSaved(false); setShowForm(false); setFormStudent(""); setFormDate(""); setFormDesc(""); setFormTeachers([]); }, 1500);
   };
@@ -1839,162 +2138,53 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students }: {
   );
 }
 
-///  SCREEN: Occurrences 
-function OccurrencesScreen({ occurrences, setOccurrences, prefilledStudent, students }: {
-  occurrences: Occurrence[];
-  setOccurrences: React.Dispatch<React.SetStateAction<Occurrence[]>>;
-  prefilledStudent?: Student | null;
-  students: Student[];
-}) {
-  const [showForm, setShowForm] = useState(false);
-  const [search, setSearch] = useState("");
-  const [formStudent, setFormStudent] = useState("");
-  const [formSubject, setFormSubject] = useState("");
-  const [formTitle, setFormTitle] = useState("");
-  const [formDesc, setFormDesc] = useState("");
-  const [saved, setSaved] = useState(false);
-
-  const SUBJECTS = ["Banco de Dados", "Programação Orientada a Objetos", "Matemática", "Física", "Química Orgânica", "Contabilidade", "Eletrotécnica", "Inglês", "Redes de Computadores"];
-
-  useEffect(() => {
-    if (prefilledStudent) {
-      setShowForm(true);
-      setFormStudent(prefilledStudent.name);
-    }
-  }, [prefilledStudent]);
-
-  const handleSave = async () => {
-    if (!formStudent || !formTitle || !formDesc) return;
-    const subject = formSubject || "No especificado";
-    const savedOccurrence = await apiClient.createOcorrencia({
-      titulo: formTitle,
-      descricao: `Aluno: ${formStudent}\nDisciplina: ${subject}\n${formDesc}`,
-      turma_id: undefined,
-      usuario_id: undefined,
-    });
-
-    const occ: Occurrence = {
-      id: savedOccurrence.id,
-      studentName: formStudent,
-      subject,
-      title: formTitle,
-      description: formDesc,
-      date: new Date(`${savedOccurrence.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
-      author: "Sistema",
-    };    setOccurrences(prev => [occ, ...prev]);
-    setSaved(true);
-    setTimeout(() => { setSaved(false); setShowForm(false); setFormStudent(""); setFormSubject(""); setFormTitle(""); setFormDesc(""); }, 1500);
-  };
-
-  const filtered = occurrences.filter(o =>
-    o.studentName.toLowerCase().includes(search.toLowerCase()) ||
-    o.title.toLowerCase().includes(search.toLowerCase()) ||
-    o.subject.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por aluno, título ou disciplina..." className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
-        </div>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white whitespace-nowrap transition-all hover:opacity-90" style={{ background: "var(--destructive)" }}>
-          <Plus size={15} /> Nova Ocorrência
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        {filtered.length === 0 && (
-          <div className="bg-card rounded-lg border border-border p-12 text-center">
-            <AlertTriangle size={32} className="mx-auto text-muted-foreground opacity-30 mb-3" />
-            <p className="text-sm text-muted-foreground">Nenhuma ocorrência registrada.</p>
-          </div>
-        )}
-        {filtered.map(occ => (
-          <div key={occ.id} className="bg-card rounded-lg border border-border overflow-hidden hover:shadow-sm transition-shadow">
-            <div className="flex items-start gap-4 p-5">
-              <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <AlertTriangle size={18} className="text-red-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <div>
-                    <p className="text-sm font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{occ.title}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-xs font-medium text-foreground">{occ.studentName}</span>
-                      <span className="text-muted-foreground text-xs">·</span>
-                      <Badge text={occ.subject} color="amber" />
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-mono text-[10px] text-muted-foreground">{occ.date}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{occ.author}</p>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">{occ.description}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(13,28,54,0.7)" }}>
-          <div className="bg-card rounded-xl border border-border w-full max-w-lg shadow-2xl">
-            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Registrar Ocorrência</p>
-              <button onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"><X size={16} className="text-muted-foreground" /></button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              {saved && <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium"><CheckCircle size={16} /> Ocorrência registrada!</div>}
-              <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
-                <select value={formStudent} onChange={e => setFormStudent(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="">Selecione o aluno...</option>
-                  {students.map(s => <option key={s.id} value={s.name}>{s.name}  #{s.registration}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Disciplina</label>
-                <select value={formSubject} onChange={e => setFormSubject(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="">Selecione a disciplina...</option>
-                  {SUBJECTS.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Título da Ocorrência *</label>
-                <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Ex: Dificuldade em atividade em grupo" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Descrição da Situação *</label>
-                <textarea rows={4} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Descreva detalhadamente o que ocorreu, o contexto, comportamentos observados e possíveis impactos..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
-              </div>
-            </div>
-            <div className="px-6 pb-5 flex items-center justify-end gap-3 border-t border-border pt-4">
-              <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors">Cancelar</button>
-              <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: "var(--destructive)" }}><AlertTriangle size={14} /> Registrar</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 //  SCREEN: Profile 
 function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState("Usurio");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("(67) 9 9234-5678");
-  const [role, setRole] = useState("Coordenador NAPNE");
-  const [siape, setSiape] = useState("2145678");
+  const [phone, setPhone] = useState("Não disponível no backend");
+  const [role, setRole] = useState("");
+  const [siape, setSiape] = useState("");
   const [tempPhoto, setTempPhoto] = useState<string | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileMessage, setProfileMessage] = useState("");
 
   const handleSave = () => {
-    setIsEditing(false);
+    setProfileMessage("O backend ainda não possui endpoint para atualizar perfil. As informações foram carregadas do banco, mas não podem ser salvas sem uma rota PUT/PATCH de usuário.");
   };
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProfile = async () => {
+      try {
+        setLoadingProfile(true);
+        setProfileMessage("");
+        const me = await apiClient.getMe();
+        if (!active) return;
+        setName(me.nome);
+        setEmail(me.email);
+        setRole(me.cargo === "Coordenador" ? "Coordenador NAPNE" : me.cargo);
+        setSiape(me.siape);
+      } catch (error) {
+        if (active) {
+          setProfileMessage(error instanceof Error ? error.message : "Erro ao carregar perfil");
+        }
+      } finally {
+        if (active) {
+          setLoadingProfile(false);
+        }
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2009,6 +2199,16 @@ function ProfileScreen() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      {loadingProfile && (
+        <div className="mb-4 rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+          Carregando perfil do backend...
+        </div>
+      )}
+      {profileMessage && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          {profileMessage}
+        </div>
+      )}
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div
           className="h-32 relative"
@@ -2023,7 +2223,7 @@ function ProfileScreen() {
                 <img src={tempPhoto} alt="Profile" className="w-28 h-28 rounded-full border-4 border-card object-cover" />
               ) : (
                 <div className="w-28 h-28 rounded-full border-4 border-card flex items-center justify-center text-3xl font-bold text-white" style={{ background: "var(--primary)" }}>
-                  RM
+                  {name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "ND"}
                 </div>
               )}
               {isEditing && (
@@ -2200,9 +2400,8 @@ export default function App({
   const [careLogs, setCareLogs] = useState<CareLog[]>(INITIAL_TIMELINE_EVENTS);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [meetings, setMeetings] = useState<MeetingEvent[]>(INITIAL_MEETINGS);
-  const [occurrences, setOccurrences] = useState<Occurrence[]>(INITIAL_OCCURRENCES);
   const [meetingPrefilledStudent, setMeetingPrefilledStudent] = useState<Student | null>(null);
-  const [occurrencePrefilledStudent, setOccurrencePrefilledStudent] = useState<Student | null>(null);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 
   const [students, setStudents] = useState<Student[]>(STUDENTS);
 
@@ -2213,22 +2412,48 @@ export default function App({
     }))
   );
 
+  const addRecentActivity = (activity: RecentActivityInput) => {
+    const fallback = dateParts();
+    setRecentActivities((current) => [
+      {
+        ...activity,
+        id: activity.id ?? `local-${Date.now()}`,
+        date: activity.date ?? fallback.date,
+        time: activity.time ?? fallback.time,
+        createdAt: activity.createdAt ?? fallback.createdAt,
+      },
+      ...current,
+    ]);
+  };
+
   useEffect(() => {
     let active = true;
 
     const loadBackendData = async () => {
       try {
-        const [backendStudents, backendMeetings, backendOccurrences] = await Promise.all([
+        const [backendStudents, backendMeetings, backendUsers, backendAtendimentos] = await Promise.all([
           apiClient.getAlunos(),
           apiClient.getReunioes(),
-          apiClient.getOcorrencias(),
+          apiClient.getUsuarios({ apenas_ativos: true }),
+          apiClient.getAtendimentos(),
         ]);
 
         if (!active) return;
 
-        setStudents(backendStudents.map(toStudent));
-        setMeetings(backendMeetings.map(toMeeting));
-        setOccurrences(backendOccurrences.map(toOccurrence));
+        const mappedStudents = backendStudents.map(toStudent);
+        const mappedMeetings = backendMeetings.map(toMeeting);
+        const studentsById = new Map(mappedStudents.map((student) => [Number(student.id), student]));
+        const usersById = new Map(backendUsers.map((user) => [user.id, user]));
+        const mappedCareLogs = backendAtendimentos.map((atendimento) => toCareLog(atendimento, studentsById, usersById));
+
+        setStudents(mappedStudents);
+        setMeetings(mappedMeetings);
+        setCareLogs(mappedCareLogs);
+        setStaffList(backendUsers.map(toStaffMember).filter((member): member is StaffMember => Boolean(member)));
+        setRecentActivities([
+          ...mappedCareLogs.map(activityFromCareLog),
+          ...mappedMeetings.map(activityFromMeeting),
+        ]);
       } catch (error) {
         console.error("Erro ao carregar dados do backend:", error);
       }
@@ -2260,7 +2485,6 @@ export default function App({
     setSelectedStudent(null);
     setShowLog(false);
     setMeetingPrefilledStudent(null);
-    setOccurrencePrefilledStudent(null);
   };
 
   const handleSelectStudent = (id: string) => {
@@ -2276,19 +2500,11 @@ export default function App({
     setShowLog(false);
   };
 
-  const handleCreateOccurrence = (student: Student) => {
-    setOccurrencePrefilledStudent(student);
-    setActiveNav("occurrences");
-    setSelectedStudent(null);
-    setShowLog(false);
-  };
-
   const handleOpenProfile = () => {
     setActiveNav("profile");
     setSelectedStudent(null);
     setShowLog(false);
     setMeetingPrefilledStudent(null);
-    setOccurrencePrefilledStudent(null);
   };
 
   const handleLogout = () => {
@@ -2296,7 +2512,6 @@ export default function App({
     setSelectedStudent(null);
     setShowLog(false);
     setMeetingPrefilledStudent(null);
-    setOccurrencePrefilledStudent(null);
     onLogout();
   };
 
@@ -2307,7 +2522,6 @@ export default function App({
     servers: "Corpo Docente",
     log: "Registrar Atendimento",
     meetings: "Reuniões",
-    occurrences: "Ocorrências",
     profile: "Meu Perfil",
     record: "Prontuário",
   };
@@ -2315,11 +2529,11 @@ export default function App({
   return (
     <div className="flex h-screen overflow-hidden bg-background" style={{ fontFamily: "Inter, sans-serif" }}>
       <div className="w-60 flex-shrink-0">
-        <Sidebar current={activeNav} onNav={handleNav} onLogout={handleLogout} />
+        <Sidebar current={activeNav} onNav={handleNav} onLogout={handleLogout} currentUser={currentUser} studentCount={students.length} />
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Topbar title={TITLES[activeNav]} onOpenProfile={handleOpenProfile} />
+        <Topbar title={TITLES[activeNav]} onOpenProfile={handleOpenProfile} currentUser={currentUser} />
 
         {/* Breadcrumb for student record */}
         {activeNav === "students" && selectedStudent && !showLog && (
@@ -2343,14 +2557,17 @@ export default function App({
               students={students}
               meetings={meetings}
               careLogs={careLogs}
-              occurrences={occurrences}
+              recentActivities={recentActivities}
               onNav={handleNav}
             />
           )}
           {activeNav === "students" && !selectedStudent && <StudentsScreen
               students={students}
               setStudents={setStudents}
+              staffList={staffList}
+              setStaffList={setStaffList}
               onSelectStudent={handleSelectStudent}
+              onActivity={addRecentActivity}
             />}
           {activeNav === "students" && selectedStudent && !showLog && (
             <StudentRecord
@@ -2358,11 +2575,16 @@ export default function App({
               onBack={() => setSelectedStudent(null)}
               onLog={() => setShowLog(true)}
               onScheduleMeeting={handleScheduleMeeting}
-              onCreateOccurrence={handleCreateOccurrence}
             />
           )}
           {activeNav === "students" && selectedStudent && showLog && (
-            <LogScreen onBack={() => setShowLog(false)} />
+            <LogScreen
+              onBack={() => setShowLog(false)}
+              currentUser={currentUser}
+              student={students.find((student) => student.id === selectedStudent)!}
+              setCareLogs={setCareLogs}
+              onActivity={addRecentActivity}
+            />
           )}
           {activeNav === "log" && (
             <CareLogScreen 
@@ -2371,7 +2593,7 @@ export default function App({
             />
           )}
           {activeNav === "servers" && (
-            <CorpoDocenteView staffList={staffList} setStaffList={setStaffList} />
+            <CorpoDocenteView staffList={staffList} setStaffList={setStaffList} onActivity={addRecentActivity} />
           )}
           {activeNav === "meetings" && (
             <MeetingsScreen
@@ -2379,10 +2601,8 @@ export default function App({
               setMeetings={setMeetings}
               prefilledStudent={meetingPrefilledStudent}
               students={students}
+              onActivity={addRecentActivity}
             />
-          )}
-          {activeNav === "occurrences" && (
-            <OccurrencesScreen occurrences={occurrences} setOccurrences={setOccurrences} prefilledStudent={occurrencePrefilledStudent} students={students} />
           )}
           {activeNav === "profile" && <ProfileScreen />}
         </main>

@@ -28,6 +28,8 @@ import type {
   Aluno as BackendAluno,
   Reuniao as BackendReuniao,
   Ocorrencia as BackendOcorrencia,
+  Atendimento as BackendAtendimento,
+  Turma as BackendTurma,
 } from "../services/api";
 
 type Screen =
@@ -51,6 +53,7 @@ interface Student {
   alert?: boolean;
   teachers: string[];
   lastCareDate?: string;
+  turmaId?: number;
 }
 
 interface MeetingEvent {
@@ -78,6 +81,7 @@ interface Occurrence {
 
 interface CareLog {
   id: number;
+  userId?: number;
   studentName: string;
   date: string;
   time: string;
@@ -85,11 +89,6 @@ interface CareLog {
   staff: string;
   text: string;
 }
-
-const STUDENTS: Student[] = [];
-const INITIAL_CARE_LOGS: CareLog[] = [];
-const INITIAL_MEETINGS: MeetingEvent[] = [];
-const INITIAL_OCCURRENCES: Occurrence[] = [];
 
 const NAV_ITEMS = [
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
@@ -112,19 +111,12 @@ const formatDatePt = (dateTime: string) => {
 };
 
 const needColorFor = (need: string) => {
-  const colors: Record<string, string> = {
-    TEA: "blue",
-    TDAH: "amber",
-    "Deficiência Visual": "purple",
-    "Deficiência Auditiva": "indigo",
-    "Altas Habilidades": "teal",
-    Dislexia: "rose",
-  };
-
-  return colors[need] ?? "green";
+  const palette = ["blue", "amber", "purple", "indigo", "teal", "rose", "green"];
+  const index = Array.from(need).reduce((total, char) => total + char.charCodeAt(0), 0) % palette.length;
+  return palette[index] ?? "green";
 };
 
-const toStudent = (aluno: BackendAluno, currentUserName: string): Student => ({
+const toStudent = (aluno: BackendAluno, currentUserName: string, turmaByAluno: Map<number, BackendTurma> = new Map()): Student => ({
   id: String(aluno.id),
   name: aluno.nome,
   registration: aluno.matricula,
@@ -139,6 +131,7 @@ const toStudent = (aluno: BackendAluno, currentUserName: string): Student => ({
         ? "Acompanhamento"
         : "Ativo",
   teachers: [currentUserName],
+  turmaId: turmaByAluno.get(aluno.id)?.id,
 });
 
 const toMeeting = (reuniao: BackendReuniao, currentUserName: string): MeetingEvent => {
@@ -150,17 +143,28 @@ const toMeeting = (reuniao: BackendReuniao, currentUserName: string): MeetingEve
   return {
     id: reuniao.id,
     studentName,
-    date: reuniao.data,
+    date: reuniao.data_reuniao,
     time: reuniao.horario_inicio.slice(0, 5),
     description: descriptionLines.join("\n").trim(),
     teachers: [currentUserName],
-    type: reuniao.tipo,
+    type: reuniao.titulo,
     status:
       reuniao.status === "Concluída" || reuniao.status === "Pendente"
         ? reuniao.status
         : "Agendada",
   };
 };
+
+const toCareLog = (atendimento: BackendAtendimento, studentsById: Map<number, Student>, currentUserName: string): CareLog => ({
+  id: atendimento.id,
+  userId: atendimento.usuario_id,
+  studentName: studentsById.get(atendimento.aluno_id)?.name ?? `Aluno #${atendimento.aluno_id}`,
+  date: new Date(`${atendimento.data_atendimento}T00:00:00`).toLocaleDateString("pt-BR"),
+  time: "00:00",
+  type: atendimento.tipo,
+  staff: currentUserName,
+  text: atendimento.descricao ?? "",
+});
 
 const toOccurrence = (ocorrencia: BackendOcorrencia, currentUserName: string): Occurrence => {
   const [studentLine, subjectLine, ...descriptionLines] = ocorrencia.descricao.split("\n");
@@ -443,26 +447,9 @@ function StudentsScreen({
   const [newRegistration, setNewRegistration] = useState("");
   const [newCourse, setNewCourse] = useState("Técnico em Informática");
   const [newYear, setNewYear] = useState("1º Ano");
-  const [newNeed, setNewNeed] = useState("TEA");
+  const [newNeed, setNewNeed] = useState("");
 
-  const needs = [
-    "Todas",
-    "TEA",
-    "TDAH",
-    "Deficiência Visual",
-    "Deficiência Auditiva",
-    "Altas Habilidades",
-    "Dislexia",
-  ];
-
-  const needColors: Record<string, string> = {
-    TEA: "blue",
-    TDAH: "amber",
-    "Deficiência Visual": "purple",
-    "Deficiência Auditiva": "indigo",
-    "Altas Habilidades": "teal",
-    Dislexia: "rose",
-  };
+  const needs = ["Todas", ...Array.from(new Set(students.map((student) => student.need).filter(Boolean)))];
 
   const filtered = students.filter(
     (student) =>
@@ -489,7 +476,7 @@ function StudentsScreen({
 
     const newStudent: Student = {
       ...toStudent(savedStudent, currentUser.name),
-      needColor: needColors[newNeed] ?? "green",
+      needColor: needColorFor(newNeed),
       teachers: [currentUser.name],
       lastCareDate: new Date().toISOString().slice(0, 10),
     };
@@ -500,7 +487,7 @@ function StudentsScreen({
     setNewRegistration("");
     setNewCourse("Técnico em Informática");
     setNewYear("1º Ano");
-    setNewNeed("TEA");
+    setNewNeed("");
     setShowModal(false);
     setModalStep(1);
   };
@@ -705,15 +692,12 @@ function StudentsScreen({
 
                   <div className="col-span-2">
                     <label className="text-xs font-medium text-foreground block mb-1">NEE *</label>
-                    <select
+                    <input
                       value={newNeed}
                       onChange={(e) => setNewNeed(e.target.value)}
+                      placeholder="Informe a necessidade educacional específica"
                       className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      {needs.slice(1).map((need) => (
-                        <option key={need}>{need}</option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="col-span-2">
@@ -853,30 +837,48 @@ function CareLogFormModal({
   const [text, setText] = useState("");
   const [saved, setSaved] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [requestError, setRequestError] = useState("");
 
-  const handleSave = (event: FormEvent) => {
+  const handleSave = async (event: FormEvent) => {
     event.preventDefault();
+    setRequestError("");
 
     if (!studentName || !dateTime || !text.trim()) return;
 
-    const date = new Date(dateTime);
+    const student = students.find((item) => item.name === studentName);
+    if (!student) {
+      setRequestError("Selecione um aluno cadastrado.");
+      return;
+    }
 
-    onSave({
-      id: Date.now(),
-      studentName,
-      date: formatDatePt(dateTime),
-      time: date.toTimeString().slice(0, 5),
-      type: interactionType,
-      staff: currentUser.name,
-      text,
-    });
+    try {
+      const savedLog = await apiClient.createAtendimento({
+        aluno_id: Number(student.id),
+        tipo: interactionType,
+        descricao: text.trim(),
+        data_atendimento: dateTime.slice(0, 10),
+      });
 
-    setSaved(true);
+      onSave({
+        id: savedLog.id,
+        userId: currentUser.id,
+        studentName,
+        date: formatDatePt(dateTime),
+        time: dateTime.slice(11, 16),
+        type: savedLog.tipo,
+        staff: currentUser.name,
+        text: savedLog.descricao ?? "",
+      });
 
-    setTimeout(() => {
-      setSaved(false);
-      onClose();
-    }, 900);
+      setSaved(true);
+
+      setTimeout(() => {
+        setSaved(false);
+        onClose();
+      }, 900);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : "Erro ao registrar atendimento");
+    }
   };
 
   return (
@@ -891,7 +893,7 @@ function CareLogFormModal({
         >
           <div>
             <p className="font-bold text-white" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
-              Registrar Atendimento / Ocorrência
+              Registrar Atendimento
             </p>
             <p className="text-white/60 text-xs mt-0.5">
               Preencha os dados abaixo. Todos os registros são auditáveis.
@@ -911,6 +913,11 @@ function CareLogFormModal({
           {saved && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium">
               <CheckCircle size={16} /> Registro salvo com sucesso!
+            </div>
+          )}
+          {requestError && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+              {requestError}
             </div>
           )}
 
@@ -1156,6 +1163,7 @@ function MeetingsScreen({
   const [formDesc, setFormDesc] = useState("");
   const [formTeachers, setFormTeachers] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [requestError, setRequestError] = useState("");
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
@@ -1185,17 +1193,23 @@ function MeetingsScreen({
   };
 
   const handleSave = async () => {
+    setRequestError("");
     if (!formStudent || !formDate || !formTime) return;
 
     const teachers = Array.from(new Set([...formTeachers, currentUser.name]));
+    const selected = students.find((student) => student.name === formStudent);
+    if (!selected?.turmaId) {
+      setRequestError("Este aluno ainda não possui turma cadastrada no backend.");
+      return;
+    }
+
     const savedMeeting = await apiClient.createReuniao({
-      tipo: formType,
+      titulo: formType,
       descricao: `Aluno: ${formStudent}\n${formDesc}`,
-      data: formDate,
+      data_reuniao: formDate,
       horario_inicio: formTime,
       horario_fim: formTime,
-      turma_id: undefined,
-      usuario_id: undefined,
+      turma_id: selected.turmaId,
     });
 
     const newMeeting: MeetingEvent = {
@@ -1420,7 +1434,11 @@ function MeetingsScreen({
                   <CheckCircle size={16} /> Reunião agendada com sucesso!
                 </div>
               )}
-
+              {requestError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {requestError}
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Aluno *</label>
                 <select
@@ -1478,7 +1496,7 @@ function MeetingsScreen({
 
               {formTeachers.length > 0 && (
                 <div>
-                  <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Professores do Aluno</label>
+                  <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Acompanhantes do Aluno</label>
                   <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-secondary/40 border border-border">
                     {formTeachers.map((teacher) => (
                       <span key={teacher} className="flex items-center gap-1 text-xs bg-card border border-border px-2 py-1 rounded-full text-foreground">
@@ -1534,6 +1552,7 @@ function OccurrencesScreen({
   const [formTitle, setFormTitle] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [saved, setSaved] = useState(false);
+  const [requestError, setRequestError] = useState("");
 
   const SUBJECTS = [
     "Banco de Dados",
@@ -1549,12 +1568,17 @@ function OccurrencesScreen({
 
   const handleSave = async () => {
     if (!formStudent || !formTitle || !formDesc) return;
+    setRequestError("");
+    const selectedStudent = students.find((student) => student.name === formStudent);
+    if (!selectedStudent?.turmaId) {
+      setRequestError("Este aluno ainda não possui turma cadastrada no backend.");
+      return;
+    }
     const subject = formSubject || "Não especificado";
     const savedOccurrence = await apiClient.createOcorrencia({
       titulo: formTitle,
       descricao: `Aluno: ${formStudent}\nDisciplina: ${subject}\n${formDesc}`,
-      turma_id: undefined,
-      usuario_id: undefined,
+      turma_id: selectedStudent.turmaId,
     });
 
     const occurrence: Occurrence = {
@@ -1664,6 +1688,11 @@ function OccurrencesScreen({
               {saved && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium">
                   <CheckCircle size={16} /> Ocorrência registrada!
+                </div>
+              )}
+              {requestError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {requestError}
                 </div>
               )}
 
@@ -1895,10 +1924,12 @@ export default function AcompanhantesApp({
 }) {
   const [activeNav, setActiveNav] = useState<Screen>("overview");
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
-  const [students, setStudents] = useState<Student[]>(STUDENTS);
-  const [careLogs, setCareLogs] = useState<CareLog[]>(INITIAL_CARE_LOGS);
-  const [meetings, setMeetings] = useState<MeetingEvent[]>(INITIAL_MEETINGS);
-  const [occurrences, setOccurrences] = useState<Occurrence[]>(INITIAL_OCCURRENCES);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [careLogs, setCareLogs] = useState<CareLog[]>([]);
+  const [meetings, setMeetings] = useState<MeetingEvent[]>([]);
+  const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const currentUserName = currentUser.name;
 
@@ -1906,20 +1937,35 @@ export default function AcompanhantesApp({
     let active = true;
 
     const loadBackendData = async () => {
+      setIsLoadingData(true);
+      setLoadError("");
       try {
-        const [backendStudents, backendMeetings, backendOccurrences] = await Promise.all([
+        const [backendStudents, backendMeetings, backendOccurrences, backendAtendimentos, backendTurmas] = await Promise.all([
           apiClient.getAlunos(),
           apiClient.getReunioes(),
           apiClient.getOcorrencias(),
+          apiClient.getAtendimentos(),
+          apiClient.getTurmas(),
         ]);
 
         if (!active) return;
 
-        setStudents(backendStudents.map((student) => toStudent(student, currentUserName)));
+        const turmaByAluno = new Map(backendTurmas.map((turma) => [turma.aluno_id, turma]));
+        const mappedStudents = backendStudents.map((student) => toStudent(student, currentUserName, turmaByAluno));
+        const studentsById = new Map(mappedStudents.map((student) => [Number(student.id), student]));
+        setStudents(mappedStudents);
         setMeetings(backendMeetings.map((meeting) => toMeeting(meeting, currentUserName)));
         setOccurrences(backendOccurrences.map((occurrence) => toOccurrence(occurrence, currentUserName)));
+        setCareLogs(backendAtendimentos.map((atendimento) => toCareLog(atendimento, studentsById, currentUserName)));
       } catch (error) {
         console.error("Erro ao carregar dados do backend:", error);
+        if (active) {
+          setLoadError(error instanceof Error ? error.message : "Erro ao carregar dados do backend");
+        }
+      } finally {
+        if (active) {
+          setIsLoadingData(false);
+        }
       }
     };
 
@@ -1931,41 +1977,30 @@ export default function AcompanhantesApp({
   }, [currentUserName]);
 
   const visibleStudents = useMemo(
-    () =>
-      students.filter((student) =>
-        student.teachers.some((teacher) =>
-          normalizeStaffName(teacher).includes(currentUserName)
-        )
-      ),
-    [students, currentUserName]
+    () => {
+      const linkedStudentNames = new Set(
+        careLogs
+          .filter((log) => log.userId === currentUser.id)
+          .map((log) => log.studentName)
+      );
+      return students.filter((student) => linkedStudentNames.has(student.name));
+    },
+    [students, careLogs, currentUser.id]
   );
 
   const visibleCareLogs = useMemo(
-    () =>
-      careLogs.filter((log) =>
-        normalizeStaffName(log.staff).includes(currentUserName)
-      ),
-    [careLogs, currentUserName]
+    () => careLogs.filter((log) => log.userId === currentUser.id),
+    [careLogs, currentUser.id]
   );
 
   const visibleMeetings = useMemo(
-    () =>
-      meetings.filter(
-        (meeting) =>
-          meeting.teachers.some((teacher) =>
-            normalizeStaffName(teacher).includes(currentUserName)
-          ) ||
-          normalizeStaffName(meeting.completedBy ?? "").includes(currentUserName)
-      ),
-    [meetings, currentUserName]
+    () => meetings.filter((meeting) => visibleStudents.some((student) => student.name === meeting.studentName)),
+    [meetings, visibleStudents]
   );
 
   const visibleOccurrences = useMemo(
-    () =>
-      occurrences.filter((occurrence) =>
-        normalizeStaffName(occurrence.author).includes(currentUserName)
-      ),
-    [occurrences, currentUserName]
+    () => occurrences.filter((occurrence) => visibleStudents.some((student) => student.name === occurrence.studentName)),
+    [occurrences, visibleStudents]
   );
 
   const selectedStudentData =
@@ -2007,7 +2042,23 @@ export default function AcompanhantesApp({
         />
 
         <main className="flex-1 overflow-y-auto">
-          {activeNav === "overview" && (
+          {isLoadingData && (
+            <div className="p-6">
+              <div className="bg-card rounded-lg border border-border p-6 text-sm text-muted-foreground">
+                Carregando dados do backend...
+              </div>
+            </div>
+          )}
+
+          {!isLoadingData && loadError && (
+            <div className="p-6">
+              <div className="bg-red-50 rounded-lg border border-red-200 p-4 text-sm text-red-700">
+                {loadError}
+              </div>
+            </div>
+          )}
+
+          {!isLoadingData && !loadError && activeNav === "overview" && (
             <OverviewScreen
               students={visibleStudents}
               meetings={visibleMeetings}
@@ -2017,7 +2068,7 @@ export default function AcompanhantesApp({
             />
           )}
 
-          {activeNav === "students" && !selectedStudent && (
+          {!isLoadingData && !loadError && activeNav === "students" && !selectedStudent && (
             <StudentsScreen
             students={visibleStudents}
             setStudents={setStudents}
@@ -2026,7 +2077,7 @@ export default function AcompanhantesApp({
             />
           )}
 
-          {activeNav === "students" && selectedStudentData && (
+          {!isLoadingData && !loadError && activeNav === "students" && selectedStudentData && (
             <StudentRecord
               student={selectedStudentData}
               careLogs={selectedStudentCareLogs}
@@ -2034,7 +2085,7 @@ export default function AcompanhantesApp({
             />
           )}
 
-          {activeNav === "log" && (
+          {!isLoadingData && !loadError && activeNav === "log" && (
             <CareLogScreen
               careLogs={visibleCareLogs}
               students={visibleStudents}
@@ -2043,7 +2094,7 @@ export default function AcompanhantesApp({
             />
           )}
 
-          {activeNav === "meetings" && (
+          {!isLoadingData && !loadError && activeNav === "meetings" && (
             <MeetingsScreen
               meetings={visibleMeetings}
               setMeetings={setMeetings}
@@ -2052,7 +2103,7 @@ export default function AcompanhantesApp({
             />
           )}
 
-          {activeNav === "occurrences" && (
+          {!isLoadingData && !loadError && activeNav === "occurrences" && (
             <OccurrencesScreen
                 occurrences={visibleOccurrences}
                 setOccurrences={setOccurrences}
@@ -2061,7 +2112,7 @@ export default function AcompanhantesApp({
             />
           )}
 
-          {activeNav === "profile" && (
+          {!isLoadingData && !loadError && activeNav === "profile" && (
             <ProfileScreen currentUser={currentUser} />
           )}
         </main>

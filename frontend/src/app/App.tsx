@@ -2,14 +2,10 @@
 import { User, Shield, AlertCircle } from "lucide-react";
 import CoordenadorApp from "./coordenador";
 import AcompanhantesApp from "./acompanhantes";
-
-const COORDENADORA_INICIAL = {
-  siape: "12345678",
-  senha: "mudar123",
-  name: "Eva Maria Testa Teles",
-};
+import { apiClient } from "../services/api";
 
 export interface LoggedInUser {
+  id: number;
   siape: string;
   name: string;
   role: "coordenador" | "acompanhante";
@@ -17,16 +13,20 @@ export interface LoggedInUser {
 
 export default function App() {
   const [loggedInUser, setLoggedInUser] = useState<LoggedInUser | null>(null);
+  const handleLogout = () => {
+    apiClient.clearToken();
+    setLoggedInUser(null);
+  };
 
   if (loggedInUser) {
     if (loggedInUser.role === "coordenador") {
-      return <CoordenadorApp currentUser={loggedInUser} onLogout={() => setLoggedInUser(null)} />;
+      return <CoordenadorApp currentUser={loggedInUser} onLogout={handleLogout} />;
     }
 
     return (
       <AcompanhantesApp
         currentUser={loggedInUser}
-        onLogout={() => setLoggedInUser(null)}
+        onLogout={handleLogout}
       />
     );
   }
@@ -44,7 +44,7 @@ function LoginScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -55,23 +55,30 @@ function LoginScreen({
 
     setLoading(true);
 
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const response = await apiClient.login({
+        siape: siape.trim(),
+        senha: pass.trim(),
+      });
 
-      if (
-        siape.trim() !== COORDENADORA_INICIAL.siape ||
-        pass.trim() !== COORDENADORA_INICIAL.senha
-      ) {
-        setError("SIAPE ou senha inválidos");
+      if (response.success && response.data) {
+        apiClient.setToken(response.data.access_token);
+        const currentUser = await apiClient.getMe();
+        onLoginSuccess({
+          id: response.data.usuario_id,
+          siape: currentUser.siape,
+          name: currentUser.nome,
+          role: currentUser.cargo === "Coordenador" ? "coordenador" : "acompanhante",
+        });
         return;
       }
-
-      onLoginSuccess({
-        siape: COORDENADORA_INICIAL.siape,
-        name: COORDENADORA_INICIAL.name,
-        role: "coordenador",
-      });
-    }, 400);
+      setError(response.message || "SIAPE ou senha inválidos");
+    } catch (err) {
+      apiClient.clearToken();
+      setError(err instanceof Error ? err.message : "SIAPE ou senha inválidos");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
