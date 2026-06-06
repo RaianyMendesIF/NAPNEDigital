@@ -27,3 +27,4 @@ class Aluno(Base):
         nullable=False,
     )
     responsavel_id = Column(Integer, ForeignKey("responsaveis.id"))
+    acompanhante_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)

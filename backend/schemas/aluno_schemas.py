@@ -14,6 +14,7 @@ class AlunoCreate(BaseModel):
     cid: str
     observacao: Optional[str] = None
     responsavel_id: Optional[int] = None
+    acompanhante_id: Optional[int] = None
 
 class AlunoUpdate(BaseModel):
     nome: Optional[str] = None
@@ -25,6 +26,7 @@ class AlunoUpdate(BaseModel):
     observacao: Optional[str] = None
     status: Optional[str] = None
     responsavel_id: Optional[int] = None
+    acompanhante_id: Optional[int] = None
 
 class AlunoResponse(BaseModel):
     id: int
@@ -40,6 +42,8 @@ class AlunoResponse(BaseModel):
     observacao: Optional[str]
     status: str
     responsavel_id: Optional[int]
+    acompanhante_id: Optional[int] = None
+    acompanhante_nome: Optional[str] = None
 
     class Config:
         from_attributes = True

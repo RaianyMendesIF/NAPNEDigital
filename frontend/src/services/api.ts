@@ -1,5 +1,35 @@
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 const TOKEN_KEY = "napne_access_token";
+
+function formatApiError(payload: unknown, status: number): string {
+  if (!payload || typeof payload !== "object") {
+    return `Erro ${status}`;
+  }
+
+  const data = payload as Record<string, unknown>;
+  const detail = data.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: string }).msg);
+        }
+        return String(item);
+      })
+      .join("; ");
+  }
+
+  if (typeof data.message === "string") {
+    return data.message;
+  }
+
+  return `Erro ${status}`;
+}
 
 export interface ApiEnvelope<T> {
   success: boolean;
@@ -35,6 +65,7 @@ export interface Usuario {
 }
 
 export interface UsuarioMe {
+  id: number;
   siape: string;
   nome: string;
   cargo: string;
@@ -74,6 +105,8 @@ export interface Aluno {
   observacao?: string | null;
   status: string;
   responsavel_id?: number | null;
+  acompanhante_id?: number | null;
+  acompanhante_nome?: string | null;
   ativo?: boolean;
 }
 
@@ -118,6 +151,8 @@ export interface Reuniao {
   horario_fim: string;
   status: string;
   usuario_id: number;
+  usuario_nome?: string | null;
+  usuario_cargo?: string | null;
 }
 
 export interface ReuniaoCreate {
@@ -138,6 +173,8 @@ export interface Ocorrencia {
   semestre?: string | null;
   ano_letivo?: number | null;
   usuario_id: number;
+  usuario_nome?: string | null;
+  usuario_cargo?: string | null;
   titulo: string;
   descricao: string;
   data_registro: string;
@@ -155,6 +192,8 @@ export interface Atendimento {
   id: number;
   aluno_id: number;
   usuario_id: number;
+  usuario_nome?: string | null;
+  usuario_cargo?: string | null;
   tipo: string;
   descricao?: string | null;
   data_atendimento: string;
@@ -165,6 +204,7 @@ export interface AtendimentoCreate {
   tipo?: string;
   descricao: string;
   data_atendimento?: string | null;
+  responsavel_id?: number | null;
 }
 
 export type AtendimentoUpdate = Partial<Omit<AtendimentoCreate, "aluno_id">>;
@@ -177,6 +217,23 @@ export interface Solicitacao {
   status: string;
   data_solicitacao: string;
   usuario_solicitante_id: number;
+}
+
+export interface SolicitacaoCreate {
+  turma_id: number;
+  descricao: string;
+}
+
+export interface Prontuario {
+  aluno: Aluno | null;
+  responsavel: Responsavel | null;
+  turmas: Turma[];
+  professores: ProfessorTurma[];
+  documentacoes: Documentacao[];
+  atendimentos: Atendimento[];
+  ocorrencias: Ocorrencia[];
+  reunioes: Reuniao[];
+  solicitacoes: Solicitacao[];
 }
 
 export interface Documentacao {
@@ -238,9 +295,12 @@ class ApiClient {
       ? await response.json()
       : null;
 
+    if (response.status === 401) {
+      this.clearToken();
+    }
+
     if (!response.ok) {
-      const message = payload?.detail ?? payload?.message ?? `Erro ${response.status}`;
-      throw new Error(message);
+      throw new Error(formatApiError(payload, response.status));
     }
 
     if (payload && typeof payload === "object" && "success" in payload) {
@@ -278,8 +338,7 @@ class ApiClient {
       : null;
 
     if (!response.ok) {
-      const message = payload?.detail ?? payload?.message ?? `Erro ${response.status}`;
-      throw new Error(message);
+      throw new Error(formatApiError(payload, response.status));
     }
 
     return payload as ApiEnvelope<T>;
@@ -336,6 +395,10 @@ class ApiClient {
 
   async getAluno(id: number): Promise<Aluno> {
     return this.request<Aluno>(`/alunos/${id}`);
+  }
+
+  async getProntuario(alunoId: number): Promise<Prontuario> {
+    return this.request<Prontuario>(`/alunos/${alunoId}/prontuario`);
   }
 
   async createAluno(data: AlunoCreate): Promise<Aluno> {
@@ -426,6 +489,10 @@ class ApiClient {
     return this.request<Solicitacao[]>(`/solicitacoes${query ? `?${query}` : ""}`);
   }
 
+  async createSolicitacao(data: SolicitacaoCreate): Promise<Solicitacao> {
+    return this.request<Solicitacao>("/solicitacoes", "POST", data);
+  }
+
   async updateSolicitacaoStatus(id: number, data: { status: "DEFERIDO" | "INDEFERIDO"; motivo?: string }): Promise<Solicitacao> {
     return this.request<Solicitacao>(`/solicitacoes/${id}/status`, "PATCH", data);
   }
@@ -440,6 +507,29 @@ class ApiClient {
     formData.append("aluno_id", String(data.aluno_id));
     formData.append("tipo_documento", data.tipo_documento);
     return this.request<Documentacao>("/documentacoes/upload", "POST", formData, { multipart: true });
+  }
+
+  async fetchDocumentacaoArquivo(id: number, download = false): Promise<Blob> {
+    const token = this.getToken();
+    const query = download ? "?download=true" : "";
+    const response = await fetch(`${this.baseUrl}/documentacoes/${id}/arquivo${query}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (response.status === 401) {
+      this.clearToken();
+    }
+
+    if (!response.ok) {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const payload = await response.json();
+        throw new Error(formatApiError(payload, response.status));
+      }
+      throw new Error(`Erro ${response.status}`);
+    }
+
+    return response.blob();
   }
 }
 

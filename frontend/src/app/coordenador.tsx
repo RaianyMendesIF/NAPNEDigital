@@ -14,11 +14,51 @@ import type {
   Atendimento as BackendAtendimento,
   Reuniao as BackendReuniao,
   Usuario as BackendUsuario,
+  Prontuario,
+  Documentacao,
 } from "../services/api";
+import { appRoleLabel, cargoDisplayLabel } from "../lib/auth";
 
+
+const COURSE_SEMESTERS = Array.from({ length: 6 }, (_, i) => `${i + 1}º Semestre`);
+const DOCUMENT_TYPES = ["anamnese - familia", "anamnese - estudante", "PEI"] as const;
+
+const parseResponsavelFromObservacao = (observacao?: string | null) => {
+  if (!observacao) return null;
+  const match = observacao.match(/Responsável:\s*([^\n]+)/i);
+  return match?.[1]?.trim() || null;
+};
+
+const formatCidDisplay = (cid?: string | null) => {
+  const value = cid?.trim();
+  if (!value || value === "Não informado") return "—";
+  return value;
+};
+
+const staffDisplayName = (
+  nome?: string | null,
+  usuarioId?: number,
+  cargo?: string | null
+) => {
+  if (nome?.trim()) return nome.trim();
+  if (cargo === "Acompanhante" || cargo === "Agente") return "Acompanhante";
+  if (usuarioId) return `Servidor #${usuarioId}`;
+  return "—";
+};
+
+const staffTimelineLabel = (
+  nome?: string | null,
+  usuarioId?: number,
+  cargo?: string | null
+) => {
+  const name = staffDisplayName(nome, usuarioId, cargo);
+  const role = cargo === "Coordenador" ? "Coordenador" : "Acompanhante";
+  return `${role}: ${name}`;
+};
 
 type Screen = "overview" | "students" | "servers" | "record" | "log" | "meetings" | "profile";
-type UserRole = "Acompanhadora" | "Coordenadora" | "Admin";
+type AppMode = "coordenador" | "acompanhante";
+type UserRole = "Coordenador" | "Acompanhante";
 type MeetingStatus = "Agendada" | "Concluída" | "Pendente";
 
 interface User {
@@ -44,6 +84,7 @@ interface Student {
   editable?: boolean; // Flag para controle de edição
   companionId?: string;
   companionName?: string;
+  turmaId?: number;
 }
 
 interface StaffMember {
@@ -94,27 +135,6 @@ interface RecentActivity {
 type RecentActivityInput = Omit<RecentActivity, "id" | "createdAt" | "date" | "time"> &
   Partial<Pick<RecentActivity, "id" | "createdAt" | "date" | "time">>;
 
-interface ClassHistory {
-  id: string;
-  course: string;
-  gradeYear: string;   // Ex: "2 Ano" ou "3 Semestre"
-  schoolYear: number;  // Ex: 2026
-  semester: number;    // Ex: 1 ou 2
-  status: 'Ativo' | 'Acompanhamento' | 'Concludo' | 'Evadido' | 'Trancado';
-  teachers: string[];  // Nomes dos professores vinculados neste semestre
-}
-
-
-const STUDENTS: Student[] = [];
-const INITIAL_TIMELINE_EVENTS: CareLog[] = [];
-const TIMELINE_EVENTS: CareLog[] = [];
-const INITIAL_MEETINGS: MeetingEvent[] = [];
-const INITIAL_STAFF: StaffMember[] = [];
-const AVAILABLE_TEACHERS: string[] = [];
-const INITIAL_HISTORY: ClassHistory[] = [];
-const USERS: User[] = [];
-const ACOMPANHADORA_STUDENTS: Record<string, string[]> = {};
-
 // Função utilitária para calcular dias desde última data
 const calculateDaysSince = (dateString?: string): number => {
   if (!dateString) return -1;
@@ -138,7 +158,10 @@ const needColorFor = (need: string) => {
   return colors[need] ?? "green";
 };
 
-const toStudent = (aluno: BackendAluno): Student => ({
+const toStudent = (
+  aluno: BackendAluno,
+  turmaByAluno: Map<number, { id: number }> = new Map()
+): Student => ({
   id: String(aluno.id),
   name: aluno.nome,
   registration: aluno.matricula,
@@ -153,25 +176,33 @@ const toStudent = (aluno: BackendAluno): Student => ({
         ? "Acompanhamento"
         : "Ativo",
   teachers: [],
+  turmaId: turmaByAluno.get(aluno.id)?.id,
+  companionId: aluno.acompanhante_id ? String(aluno.acompanhante_id) : undefined,
+  companionName: aluno.acompanhante_nome ?? undefined,
 });
 
-const toMeeting = (reuniao: BackendReuniao): MeetingEvent => {
-  const [studentLine, ...descriptionLines] = (reuniao.descricao ?? "").split("\n");
+const toMeeting = (
+  reuniao: BackendReuniao,
+  studentsById: Map<number, Student> = new Map()
+): MeetingEvent => {
+  const studentName = reuniao.aluno_id
+    ? studentsById.get(reuniao.aluno_id)?.name ?? `Aluno #${reuniao.aluno_id}`
+    : "Aluno não informado";
 
   return {
     id: reuniao.id,
-    studentName: studentLine.startsWith("Aluno: ")
-      ? studentLine.replace("Aluno: ", "").trim()
-      : "Aluno não informado",
-    date: reuniao.data,
-    time: reuniao.horario_inicio.slice(0, 5),
-    description: descriptionLines.join("\n").trim(),
+    studentName,
+    date: reuniao.data_reuniao,
+    time: reuniao.horario_inicio?.slice(0, 5) ?? "09:00",
+    description: reuniao.descricao ?? "",
     teachers: [],
-    type: reuniao.tipo,
+    type: reuniao.titulo,
     status:
-      reuniao.status === "Concluída" || reuniao.status === "Pendente"
-        ? reuniao.status
-        : "Agendada",
+      reuniao.status === "Realizada"
+        ? "Concluída"
+        : reuniao.status === "Pendente"
+          ? "Pendente"
+          : "Agendada",
   };
 };
 
@@ -197,7 +228,11 @@ const toCareLog = (
     date,
     time,
     type: atendimento.tipo || "Atendimento",
-    staff: usersById.get(atendimento.usuario_id)?.nome ?? `Servidor #${atendimento.usuario_id}`,
+    staff: staffTimelineLabel(
+      atendimento.usuario_nome ?? usersById.get(atendimento.usuario_id)?.nome,
+      atendimento.usuario_id,
+      atendimento.usuario_cargo ?? usersById.get(atendimento.usuario_id)?.cargo
+    ),
     text: atendimento.descricao ?? "",
   };
 };
@@ -236,7 +271,7 @@ const toStaffMember = (usuario: BackendUsuario): StaffMember | null => {
     };
   }
 
-  if (usuario.cargo === "Agente") {
+  if (usuario.cargo === "Acompanhante" || usuario.cargo === "Agente") {
     return {
       id: String(usuario.id),
       name: usuario.nome,
@@ -312,10 +347,17 @@ const KpiCard = ({
 );
 
 //  Sidebar 
-const NAV_ITEMS = [
+const NAV_ITEMS_COORDENADOR = [
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
   { id: "students", label: "Alunos", icon: Users },
   { id: "servers", label: "Corpo Docente", icon: Users },
+  { id: "log", label: "Atendimentos", icon: Activity },
+  { id: "meetings", label: "Reuniões", icon: CalendarDays },
+];
+
+const NAV_ITEMS_ACOMPANHANTE = [
+  { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
+  { id: "students", label: "Alunos", icon: Users },
   { id: "log", label: "Atendimentos", icon: Activity },
   { id: "meetings", label: "Reuniões", icon: CalendarDays },
 ];
@@ -326,12 +368,16 @@ function Sidebar({
   onLogout,
   currentUser,
   studentCount,
+  navItems,
+  roleLabel,
 }: {
   current: string;
   onNav: (s: Screen) => void;
   onLogout: () => void;
   currentUser: User;
   studentCount: number;
+  navItems: typeof NAV_ITEMS_COORDENADOR;
+  roleLabel: string;
 }) {
   const initials = currentUser.name
     .split(" ")
@@ -360,7 +406,7 @@ function Sidebar({
       <nav className="flex-1 py-4 px-3 overflow-y-auto">
         <p className="text-[10px] font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: "var(--sidebar-foreground)", opacity: 0.5 }}>Menu Principal</p>
         <ul className="space-y-0.5">
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+          {navItems.map(({ id, label, icon: Icon }) => {
             const active = current === id;
             return (
               <li key={id}>
@@ -384,8 +430,8 @@ function Sidebar({
             <span className="text-white text-xs font-bold">{initials || "EM"}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-white text-xs font-semibold leading-tight truncate">{currentUser.name || "Eva Maria"}</p>
-            <p className="text-[10px] leading-tight" style={{ color: "var(--sidebar-foreground)" }}>Coordenador NAPNE</p>
+            <p className="text-white text-xs font-semibold leading-tight truncate">{currentUser.name}</p>
+            <p className="text-[10px] leading-tight" style={{ color: "var(--sidebar-foreground)" }}>{roleLabel}</p>
           </div>
           <button
             onClick={onLogout}
@@ -400,7 +446,7 @@ function Sidebar({
 }
 
 //  Topbar 
-function Topbar({ title, onOpenProfile, currentUser }: { title: string; onOpenProfile: () => void; currentUser: User }) {
+function Topbar({ title, onOpenProfile, currentUser, roleLabel }: { title: string; onOpenProfile: () => void; currentUser: User; roleLabel: string }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const initials = currentUser.name
     .split(" ")
@@ -446,8 +492,8 @@ function Topbar({ title, onOpenProfile, currentUser }: { title: string; onOpenPr
             <span className="text-white text-xs font-bold">{initials || "EM"}</span>
           </div>
           <div className="hidden sm:block">
-            <p className="text-xs font-semibold text-foreground leading-tight">{currentUser.name || "Eva Maria"}</p>
-            <p className="text-[10px] text-muted-foreground leading-tight">Coordenador</p>
+            <p className="text-xs font-semibold text-foreground leading-tight">{currentUser.name}</p>
+            <p className="text-[10px] text-muted-foreground leading-tight">{roleLabel}</p>
           </div>
           <ChevronDown size={14} className="text-muted-foreground" />
         </button>
@@ -656,7 +702,7 @@ function OverviewScreen({
 
   return (
     <div className="p-6 space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <KpiCard
             icon={Users}
             label="Alunos Ativos"
@@ -666,7 +712,6 @@ function OverviewScreen({
             onClick={() => onNav("students")}
       />
         <KpiCard icon={Clock} label="Atend. Pendentes" value={pendingCareLogs} sub="Aguardando registro" color="bg-amber-500" onClick={() => setShowPendingCareModal(true)} />
-        <KpiCard icon={FileText} label="Prorrogações" value={0} sub="Sem dados cadastrados" color="bg-teal-600" />
         <KpiCard
           icon={CalendarDays}
           label="Reuniões na Semana"
@@ -798,6 +843,7 @@ function StudentsScreen({
   setStaffList,
   onSelectStudent,
   onActivity,
+  canDeleteStudent = false,
 }: {
   students: Student[];
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
@@ -805,6 +851,7 @@ function StudentsScreen({
   setStaffList: React.Dispatch<React.SetStateAction<StaffMember[]>>;
   onSelectStudent: (id: string) => void;
   onActivity: (activity: RecentActivityInput) => void;
+  canDeleteStudent?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [filterCourse, setFilterCourse] = useState("Todos");
@@ -813,12 +860,81 @@ function StudentsScreen({
 
   const [newStudentName, setNewStudentName] = useState("");
   const [newRegistration, setNewRegistration] = useState("");
+  const [newCpf, setNewCpf] = useState("");
+  const [newBirthDate, setNewBirthDate] = useState("");
+  const [newPhone, setNewPhone] = useState("");
   const [newCourse, setNewCourse] = useState("Técnico em Informática");
-  const [newYear, setNewYear] = useState("1º Ano");
-  const [newNeed, setNewNeed] = useState("TEA");
+  const [newYear, setNewYear] = useState(COURSE_SEMESTERS[0]);
+  const [newNeed, setNewNeed] = useState("");
+  const [newCid, setNewCid] = useState("");
+  const [newResponsavel, setNewResponsavel] = useState("");
+  const [newResponsavelEmail, setNewResponsavelEmail] = useState("");
+  const [newHistorico, setNewHistorico] = useState("");
+  const [newObservacao, setNewObservacao] = useState("");
   const [newCompanionId, setNewCompanionId] = useState("");
   const [removingStudentId, setRemovingStudentId] = useState<string | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
+  const [modalError, setModalError] = useState("");
+  const [isSavingStudent, setIsSavingStudent] = useState(false);
+
+  const normalizeCpf = (cpf: string) => cpf.replace(/\D/g, "");
+
+  const isStep1Valid =
+    newStudentName.trim().length >= 3 &&
+    newRegistration.trim().length >= 1 &&
+    normalizeCpf(newCpf).length === 11 &&
+    newBirthDate !== "";
+
+  const isStep2Valid =
+    newCourse.trim().length >= 1 &&
+    newYear.trim().length >= 1 &&
+    newNeed.trim().length >= 1;
+
+  const canSaveStudent = isStep1Valid && isStep2Valid;
+
+  const resetStudentForm = () => {
+    setNewStudentName("");
+    setNewRegistration("");
+    setNewCpf("");
+    setNewBirthDate("");
+    setNewPhone("");
+    setNewCourse("Técnico em Informática");
+    setNewYear(COURSE_SEMESTERS[0]);
+    setNewNeed("");
+    setNewCid("");
+    setNewResponsavel("");
+    setNewResponsavelEmail("");
+    setNewHistorico("");
+    setNewObservacao("");
+    setNewCompanionId("");
+    setModalError("");
+    setModalStep(1);
+  };
+
+  const getStepValidationMessage = (step: number) => {
+    if (step === 1) {
+      if (newStudentName.trim().length < 3) return "Informe o nome completo (mínimo 3 caracteres).";
+      if (!newRegistration.trim()) return "Informe a matrícula.";
+      if (normalizeCpf(newCpf).length !== 11) return "Informe um CPF válido com 11 dígitos.";
+      if (!newBirthDate) return "Informe a data de nascimento.";
+    }
+    if (step === 2) {
+      if (!newCourse.trim()) return "Selecione o curso.";
+      if (!newYear.trim()) return "Selecione o semestre.";
+      if (!newNeed.trim()) return "Informe a NEE.";
+    }
+    return "";
+  };
+
+  const handleNextStep = () => {
+    const message = getStepValidationMessage(modalStep);
+    if (message) {
+      setModalError(message);
+      return;
+    }
+    setModalError("");
+    setModalStep((step) => step + 1);
+  };
 
   const needs = ["Todas", "TEA", "TDAH", "Deficiência Visual", "Deficiência Auditiva", "Altas Habilidades", "Dislexia"];
   const courseFilters = ["Todos", "Técnico em Informática", "Técnico em Eletrotécnica"];
@@ -830,27 +946,73 @@ function StudentsScreen({
 
   const handleSaveStudent = async () => {
     setRequestMessage("");
-    if (!newStudentName.trim() || !newRegistration.trim()) return;
+    setModalError("");
+
+    const step1Message = getStepValidationMessage(1);
+    const step2Message = getStepValidationMessage(2);
+    if (step1Message || step2Message) {
+      setModalError(step1Message || step2Message);
+      if (step1Message) setModalStep(1);
+      else if (step2Message) setModalStep(2);
+      return;
+    }
+
+    setIsSavingStudent(true);
+    try {
     const selectedCompanion = companions.find((member) => member.id === newCompanionId);
+    const observacaoParts = [newHistorico.trim(), newObservacao.trim()].filter(Boolean);
+    const responsavelNome = newResponsavel.trim();
+    const telefoneContato = newPhone.trim();
+    const telefoneDigits = telefoneContato.replace(/\D/g, "");
+    let responsavelId: number | undefined;
+
+    if (responsavelNome && telefoneDigits.length >= 8) {
+      const responsavel = await apiClient.createResponsavel({
+        nome: responsavelNome,
+        telefone: telefoneContato,
+        email: newResponsavelEmail.trim() || undefined,
+      });
+      responsavelId = responsavel.id;
+    } else if (responsavelNome) {
+      observacaoParts.unshift(`Responsável: ${responsavelNome}`);
+    }
+
     const savedStudent = await apiClient.createAluno({
       matricula: newRegistration.trim(),
       nome: newStudentName.trim(),
-      data_nascimento: "2000-01-01",
-      cpf: `000${newRegistration.trim()}`.slice(-11),
-      telefone: "",
+      data_nascimento: newBirthDate,
+      cpf: normalizeCpf(newCpf),
+      telefone: telefoneContato || undefined,
       curso: newCourse,
       ano: newYear,
       necessidade_especial: newNeed,
-      cid: "Não informado",
-      observacao: "",
+      cid: newCid.trim() || "Não informado",
+      observacao: observacaoParts.join("\n\n") || undefined,
+      responsavel_id: responsavelId,
+      acompanhante_id: selectedCompanion ? Number(selectedCompanion.id) : undefined,
     });
 
+    const now = new Date();
+    const semestre = now.getMonth() < 6 ? "1" : "2" as const;
+    let turmaId: number | undefined;
+    try {
+      const turma = await apiClient.createTurma({
+        aluno_id: savedStudent.id,
+        ano_letivo: now.getFullYear(),
+        semestre,
+      });
+      turmaId = turma.id;
+    } catch {
+      // turma pode já existir para o ciclo
+    }
+
     const newStudent: Student = {
-      ...toStudent(savedStudent),
+      ...toStudent(savedStudent, turmaId ? new Map([[savedStudent.id, { id: turmaId }]]) : new Map()),
       needColor: needColorFor(newNeed),
       teachers: selectedCompanion ? [selectedCompanion.name] : [],
       companionId: selectedCompanion?.id,
       companionName: selectedCompanion?.name,
+      turmaId,
     };
 
     setStudents(prev => [...prev, newStudent]);
@@ -868,14 +1030,13 @@ function StudentsScreen({
       ));
     }
 
-    setNewStudentName("");
-    setNewRegistration("");
-    setNewCourse("Técnico em Informática");
-    setNewYear("1º Ano");
-    setNewNeed("TEA");
-    setNewCompanionId("");
+    resetStudentForm();
     setShowModal(false);
-    setModalStep(1);
+    } catch (error) {
+      setModalError(error instanceof Error ? error.message : "Erro ao cadastrar aluno");
+    } finally {
+      setIsSavingStudent(false);
+    }
   };
 
   const handleRemoveStudent = async (student: Student) => {
@@ -918,7 +1079,7 @@ function StudentsScreen({
               {courseFilters.map(course => <option key={course}>{course}</option>)}
             </select>
           </div>
-          <button onClick={() => { setShowModal(true); setModalStep(1); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white whitespace-nowrap transition-all hover:opacity-90" style={{ background: "var(--accent)" }}>
+          <button onClick={() => { resetStudentForm(); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white whitespace-nowrap transition-all hover:opacity-90" style={{ background: "var(--accent)" }}>
             <Plus size={15} /> Adicionar Aluno
           </button>
         </div>
@@ -936,7 +1097,7 @@ function StudentsScreen({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
-                {["Nome / Matrícula", "NEE", "Curso / Turma", "Ano", "Status", "Ações"].map(h => (
+                {["Nome / Matrícula", "NEE", "Curso / Turma", "Ano", "Acompanhante", "Status", "Ações"].map(h => (
                   <th key={h} className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -961,21 +1122,24 @@ function StudentsScreen({
                   <td className="px-5 py-3.5"><Badge text={s.need} color={s.needColor} /></td>
                   <td className="px-5 py-3.5 text-xs text-muted-foreground max-w-xs truncate">{s.course}</td>
                   <td className="px-5 py-3.5 text-xs text-muted-foreground font-mono">{s.year}</td>
+                  <td className="px-5 py-3.5 text-xs text-foreground">{s.companionName || "—"}</td>
                   <td className="px-5 py-3.5"><StatusBadge status={s.status} /></td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => onSelectStudent(s.id)} className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md hover:bg-secondary" style={{ color: "var(--accent)" }}>
                         <Eye size={13} /> Prontuário
                       </button>
-                      <button
-                        onClick={() => handleRemoveStudent(s)}
-                        disabled={removingStudentId === s.id}
-                        title="Remover aluno"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-8 h-8 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label={`Remover aluno ${s.name}`}
-                      >
-                        {removingStudentId === s.id ? <Clock size={13} /> : <Trash2 size={13} />}
-                      </button>
+                      {canDeleteStudent && (
+                        <button
+                          onClick={() => handleRemoveStudent(s)}
+                          disabled={removingStudentId === s.id}
+                          title="Remover aluno"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-8 h-8 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label={`Remover aluno ${s.name}`}
+                        >
+                          {removingStudentId === s.id ? <Clock size={13} /> : <Trash2 size={13} />}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -993,7 +1157,7 @@ function StudentsScreen({
                 <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Adicionar Novo Aluno</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Etapa {modalStep} de 3: {modalStep === 1 ? "Dados Pessoais" : modalStep === 2 ? "Informações Acadêmicas" : "Anamnese Inicial"}</p>
               </div>
-              <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"><X size={16} className="text-muted-foreground" /></button>
+              <button onClick={() => { setShowModal(false); resetStudentForm(); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"><X size={16} className="text-muted-foreground" /></button>
             </div>
             <div className="px-6 pt-5 flex items-center gap-2">
               {[1, 2, 3].map(step => (
@@ -1015,32 +1179,58 @@ function StudentsScreen({
   placeholder="2025001"
   className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
  /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">CPF</label><input placeholder="000.000.000-00" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Data de Nascimento</label><input type="date" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Contato / WhatsApp</label><input placeholder="(67) 9 9999-9999" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">CPF *</label><input value={newCpf} onChange={e => setNewCpf(e.target.value)} placeholder="000.000.000-00" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Data de Nascimento *</label><input type="date" value={newBirthDate} onChange={e => setNewBirthDate(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Contato / WhatsApp</label><input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="(67) 9 9999-9999" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
               {modalStep === 2 && (
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-xs font-medium text-foreground block mb-1">Curso *</label><select value={newCourse} onChange={e => setNewCourse(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>Técnico em Informática</option><option>Técnico em Eletrotécnica</option></select></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Ano / Turma *</label><select value={newYear} onChange={e => setNewYear(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>1º Ano</option><option>2º Ano</option><option>3º Ano</option></select></div>
-                  <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">NEE *</label><select value={newNeed} onChange={e => setNewNeed(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">{needs.slice(1).map(n => <option key={n}>{n}</option>)}</select></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Semestre *</label><select value={newYear} onChange={e => setNewYear(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">{COURSE_SEMESTERS.map((semester) => <option key={semester}>{semester}</option>)}</select></div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-foreground block mb-1">NEE *</label>
+                    <input
+                      value={newNeed}
+                      onChange={e => setNewNeed(e.target.value)}
+                      placeholder="Ex: TEA, TDAH, Deficiência Visual..."
+                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
                   <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">Acompanhante</label><select value={newCompanionId} onChange={e => setNewCompanionId(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option value="">Selecione um acompanhante...</option>{companions.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></div>
-                  <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">CID-10</label><input placeholder="Ex: F84.0" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">CID-10</label><input value={newCid} onChange={e => setNewCid(e.target.value)} placeholder="Ex: F84.0" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
               {modalStep === 3 && (
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground">Informações da entrevista familiar inicial (Anamnese).</p>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Nome do Responsável Principal</label><input placeholder="Nome completo" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Histórico Médico / Diagnóstico Resumido</label><textarea rows={3} placeholder="Descreva o histrico do aluno..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Observações / Preferências de Comunicação</label><textarea rows={2} placeholder="Outras informações relevantes..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Nome do Responsável Principal</label><input value={newResponsavel} onChange={e => setNewResponsavel(e.target.value)} placeholder="Nome completo" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">E-mail do Responsável</label><input type="email" value={newResponsavelEmail} onChange={e => setNewResponsavelEmail(e.target.value)} placeholder="email@exemplo.com" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Histórico Médico / Diagnóstico Resumido</label><textarea value={newHistorico} onChange={e => setNewHistorico(e.target.value)} rows={3} placeholder="Descreva o histórico do aluno..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div><label className="text-xs font-medium text-foreground block mb-1">Observações / Preferências de Comunicação</label><textarea value={newObservacao} onChange={e => setNewObservacao(e.target.value)} rows={2} placeholder="Outras informações relevantes..." className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
             </div>
+            {modalError && (
+              <div className="px-6 pb-2">
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{modalError}</p>
+              </div>
+            )}
             <div className="px-6 pb-5 flex items-center justify-between gap-3">
-              <button onClick={() => modalStep > 1 ? setModalStep(s => s - 1) : setShowModal(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors">{modalStep > 1 ? "Voltar" : "Cancelar"}</button>
-              <button onClick={() => modalStep < 3 ? setModalStep(s => s + 1) : handleSaveStudent()}className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: modalStep === 3 ? "var(--accent)" : "var(--primary)" }}>{modalStep === 3 ? "Salvar Cadastro" : "Próxima Etapa"}</button>
+              <button onClick={() => modalStep > 1 ? (setModalError(""), setModalStep(s => s - 1)) : (setShowModal(false), resetStudentForm())} className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors">{modalStep > 1 ? "Voltar" : "Cancelar"}</button>
+              <button
+                onClick={() => modalStep < 3 ? handleNextStep() : handleSaveStudent()}
+                disabled={
+                  isSavingStudent ||
+                  (modalStep === 1 && !isStep1Valid) ||
+                  (modalStep === 2 && !isStep2Valid) ||
+                  (modalStep === 3 && !canSaveStudent)
+                }
+                className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: modalStep === 3 ? "var(--accent)" : "var(--primary)" }}
+              >
+                {isSavingStudent ? "Salvando..." : modalStep === 3 ? "Salvar Cadastro" : "Próxima Etapa"}
+              </button>
             </div>
           </div>
         </div>
@@ -1067,7 +1257,14 @@ function CorpoDocenteView({
 
   // Estados para o formulário de cadastro
   const [newName, setNewName] = useState('');
-  const [newRole] = useState<StaffMember['role']>('Acompanhante');
+  const [newCargo, setNewCargo] = useState<"Acompanhante" | "Coordenador">("Acompanhante");
+  const coordenadorCount = staffList.filter((m) => m.role === "Coordenador").length;
+
+  const openAddMemberModal = () => {
+    setNewCargo("Acompanhante");
+    setRequestMessage("");
+    setIsModalOpen(true);
+  };
   const [newEmail, setNewEmail] = useState('');
   const [newSiape, setNewSiape] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -1079,13 +1276,26 @@ function CorpoDocenteView({
     setRequestMessage("");
     if (!newName.trim() || !newEmail.trim() || !newSiape.trim() || !newPassword.trim()) return;
 
+    const siapeDigits = newSiape.replace(/\D/g, "");
+    if (siapeDigits.length !== 7) {
+      setRequestMessage("O SIAPE deve ter exatamente 7 dígitos.");
+      return;
+    }
+    if (newPassword.trim().length < 8) {
+      setRequestMessage("A senha inicial deve ter no mínimo 8 caracteres.");
+      return;
+    }
+    if (newCargo === "Coordenador" && coordenadorCount >= 1) {
+      setRequestMessage("Já existe um coordenador cadastrado. A equipe NAPNE tem apenas 1 coordenador.");
+      return;
+    }
     try {
       setIsSaving(true);
       const created = await apiClient.createUsuario({
         nome: newName.trim(),
-        cargo: "Agente",
+        cargo: newCargo,
         email: newEmail.trim(),
-        siape: newSiape.trim(),
+        siape: siapeDigits,
         senha: newPassword.trim(),
       });
 
@@ -1214,7 +1424,7 @@ function CorpoDocenteView({
           <p className="text-xs text-gray-500 mt-0.5">Gerencie os acessos, cargos e visualize as turmas de cada profissional.</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={openAddMemberModal}
           className="text-white px-4 py-2 rounded-lg font-medium text-sm transition shadow-sm hover:opacity-90"
           style={{ background: "var(--primary)" }}
         >
@@ -1311,17 +1521,27 @@ function CorpoDocenteView({
                   <input 
                     type="text" 
                     value={newSiape}
-                    onChange={(e) => setNewSiape(e.target.value)}
-                    placeholder="Ex: 1234567"
+                    onChange={(e) => setNewSiape(e.target.value.replace(/\D/g, "").slice(0, 7))}
+                    placeholder="7 dígitos"
+                    inputMode="numeric"
+                    maxLength={7}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
+                  <p className="text-[10px] text-gray-500 mt-1">O acompanhante usará o SIAPE e a senha inicial para entrar no sistema.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Usuário</label>
-                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700">
-                    Acompanhante
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+                  <select
+                    value={newCargo}
+                    onChange={(e) => setNewCargo(e.target.value as "Acompanhante" | "Coordenador")}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Acompanhante">Acompanhante</option>
+                    <option value="Coordenador" disabled={coordenadorCount >= 1}>
+                      Coordenador{coordenadorCount >= 1 ? " (já cadastrado)" : ""}
+                    </option>
+                  </select>
                 </div>
               </div>
 
@@ -1380,6 +1600,185 @@ function CorpoDocenteView({
 }
 
 
+function AtendimentoModal({
+  students,
+  currentUser,
+  staffList,
+  mode,
+  onClose,
+  onSaved,
+}: {
+  students: Student[];
+  currentUser: User;
+  staffList: StaffMember[];
+  mode: AppMode;
+  onClose: () => void;
+  onSaved: (log: CareLog) => void;
+}) {
+  const responsaveis = [
+    { id: currentUser.id, name: currentUser.name, role: currentUser.role },
+    ...staffList
+      .filter((member) => member.role === "Acompanhante")
+      .map((member) => ({ id: member.id, name: member.name, role: member.role })),
+  ];
+
+  const [studentId, setStudentId] = useState(students[0]?.id ?? "");
+  const [responsavelId, setResponsavelId] = useState(currentUser.id);
+  const [interactionType, setInteractionType] = useState("Atendimento Individual");
+  const [interactionDate, setInteractionDate] = useState(new Date().toISOString().slice(0, 16));
+  const [description, setDescription] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const canSave = students.length > 0 && studentId && description.trim().length >= 3;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setRequestMessage("");
+    setIsSaving(true);
+    try {
+      const student = students.find((s) => s.id === studentId);
+      if (!student) {
+        setRequestMessage("Selecione um aluno válido.");
+        return;
+      }
+      const savedLog = await apiClient.createAtendimento({
+        aluno_id: Number(student.id),
+        tipo: interactionType,
+        descricao: description.trim(),
+        data_atendimento: interactionDate.slice(0, 10),
+        responsavel_id:
+          mode === "coordenador" ? Number(responsavelId) : Number(currentUser.id),
+      });
+      const { date, time } = dateParts(savedLog.data_atendimento ?? interactionDate);
+      const newLog: CareLog = {
+        id: savedLog.id,
+        studentName: student.name,
+        date,
+        time,
+        type: savedLog.tipo || interactionType,
+        staff: staffTimelineLabel(
+          savedLog.usuario_nome,
+          savedLog.usuario_id,
+          savedLog.usuario_cargo
+        ),
+        text: savedLog.descricao ?? description.trim(),
+      };
+      onSaved(newLog);
+      onClose();
+    } catch (error) {
+      setRequestMessage(error instanceof Error ? error.message : "Erro ao registrar atendimento");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(13,28,54,0.7)" }}>
+      <div className="bg-card rounded-xl border border-border w-full max-w-lg shadow-2xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between" style={{ background: "var(--primary)" }}>
+          <div>
+            <p className="font-bold text-white">Registrar Atendimento</p>
+            <p className="text-white/60 text-xs mt-0.5">O registro fará parte do prontuário do aluno.</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors">
+            <X size={16} className="text-white" />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          {requestMessage && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+              <AlertCircle size={16} /> {requestMessage}
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-semibold text-foreground block mb-1.5">Aluno *</label>
+            {students.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Cadastre um aluno antes de registrar atendimentos.</p>
+            ) : (
+              <select
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Selecione o aluno</option>
+                {students.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} · #{s.registration}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-1.5">Tipo *</label>
+              <select
+                value={interactionType}
+                onChange={(e) => setInteractionType(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {["Atendimento Individual", "Reunião com Pais", "Incidente Acadêmico", "Ocorrência Comportamental", "Revisão de PEI", "Contato Telefônico"].map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-1.5">Data *</label>
+              <input
+                type="datetime-local"
+                value={interactionDate}
+                onChange={(e) => setInteractionDate(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-foreground block mb-1.5">Responsável *</label>
+            {mode === "coordenador" ? (
+              <select
+                value={responsavelId}
+                onChange={(e) => setResponsavelId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {responsaveis.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} · {member.role}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground">
+                <Shield size={14} />
+                <span>{currentUser.name} · Acompanhante</span>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-foreground block mb-1.5">Relato descritivo *</label>
+            <textarea
+              rows={5}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Descreva o atendimento realizado..."
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+        <div className="px-6 pb-5 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary">Cancelar</button>
+          <button
+            onClick={handleSave}
+            disabled={!canSave || isSaving}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "var(--accent)" }}
+          >
+            <CheckCircle size={15} /> {isSaving ? "Salvando..." : "Salvar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 //  SCREEN: Care Log & Management (Atendimentos Screen) 
 function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAddLogClick: () => void }) {
   const [search, setSearch] = useState("");
@@ -1422,7 +1821,7 @@ function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAdd
                     <div>
                       <h3 className="text-sm font-bold text-foreground">{log.studentName}</h3>
                       <p className="text-xs text-muted-foreground font-medium mt-0.5">
-                        <span className="text-foreground font-semibold">{log.type}</span> · Registrado por {log.staff}
+                        <span className="text-foreground font-semibold">{log.type}</span> · {log.staff}
                       </p>
                     </div>
                     <div className="text-right whitespace-nowrap">
@@ -1460,24 +1859,60 @@ function CareLogScreen({ careLogs, onAddLogClick }: { careLogs: CareLog[]; onAdd
 function StudentRecord({ student, onBack, onLog, onScheduleMeeting }: {
   student: Student;
   onBack: () => void;
-  onLog: () => void;
-  onScheduleMeeting: (student: Student) => void;
+  onLog?: () => void;
+  onScheduleMeeting?: (student: Student) => void;
 }) {
-  // 1. Atualizado o Estado da Tab para incluir "classes"
-  const [tab, setTab] = useState<"timeline" | "pei" | "requests" | "classes">("timeline");
+  const [tab, setTab] = useState<"timeline" | "pei">("timeline");
+  const [prontuario, setProntuario] = useState<Prontuario | null>(null);
+  const [loadingProntuario, setLoadingProntuario] = useState(true);
+  const [prontuarioError, setProntuarioError] = useState("");
+  const [isAnexoModalOpen, setIsAnexoModalOpen] = useState(false);
+  const [anexoTipo, setAnexoTipo] = useState<string>(DOCUMENT_TYPES[0]);
+  const [anexoFile, setAnexoFile] = useState<File | null>(null);
+  const [anexoError, setAnexoError] = useState("");
+  const [isUploadingAnexo, setIsUploadingAnexo] = useState(false);
+  const [documentoActionId, setDocumentoActionId] = useState<number | null>(null);
 
-  // 2. Estados adicionados para gerenciar o histórico de turmas e modal local
-  const [isClassModalOpen, setIsClassModalOpen] = useState(false);
-  const [classHistory, setClassHistory] = useState<ClassHistory[]>([]);
-  
-  // Estados do formulário de nova turma
-  const [newGradeYear, setNewGradeYear] = useState('');
-  const [newSchoolYear, setNewSchoolYear] = useState(new Date().getFullYear());
-  const [newSemester, setNewSemester] = useState(1);
-  const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    setLoadingProntuario(true);
+    apiClient.getProntuario(Number(student.id))
+      .then((data) => {
+        if (!active) return;
+        setProntuario(data);
+      })
+      .catch((err) => {
+        if (active) setProntuarioError(err instanceof Error ? err.message : "Erro ao carregar prontuário");
+      })
+      .finally(() => {
+        if (active) setLoadingProntuario(false);
+      });
+    return () => { active = false; };
+  }, [student.id]);
 
-  // Lista de docentes disponíveis para o checkbox do modal (Baseado no seu corpo docente)
-  const AVAILABLE_TEACHERS: string[] = [];
+  const timelineEvents = [
+    ...(prontuario?.atendimentos ?? []).map((a) => ({
+      type: a.tipo,
+      staff: staffTimelineLabel(a.usuario_nome, a.usuario_id, a.usuario_cargo),
+      date: new Date(a.data_atendimento).toLocaleDateString("pt-BR"),
+      time: "00:00",
+      text: a.descricao ?? "",
+    })),
+    ...(prontuario?.ocorrencias ?? []).map((o) => ({
+      type: `Ocorrência: ${o.titulo}`,
+      staff: staffTimelineLabel(o.usuario_nome, o.usuario_id, o.usuario_cargo),
+      date: new Date(o.data_registro).toLocaleDateString("pt-BR"),
+      time: "00:00",
+      text: o.descricao,
+    })),
+    ...(prontuario?.reunioes ?? []).map((r) => ({
+      type: `Reunião: ${r.titulo}`,
+      staff: staffTimelineLabel(r.usuario_nome, r.usuario_id, r.usuario_cargo),
+      date: new Date(r.data_reuniao).toLocaleDateString("pt-BR"),
+      time: r.horario_inicio?.slice(0, 5) ?? "09:00",
+      text: r.descricao ?? "",
+    })),
+  ];
 
   const typeStyle = (type: string) => {
     if (type.includes("Ocorrência")) return { icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50" };
@@ -1486,28 +1921,96 @@ function StudentRecord({ student, onBack, onLog, onScheduleMeeting }: {
     return { icon: Activity, color: "text-indigo-500", bg: "bg-indigo-50" };
   };
 
-  const handleCreateClass = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newGradeYear.trim() || selectedTeachers.length === 0) return;
-
-    // Conclui a turma ativa anterior automaticamente
-    const archivedHistory = classHistory.map(c => c.status === 'Ativo' ? { ...c, status: 'Concluído' } : c);
-
-    const newClass = {
-      id: String(Date.now()),
-      course: student.course, // Herda o curso atual do aluno
-      gradeYear: newGradeYear,
-      schoolYear: newSchoolYear,
-      semester: newSemester,
-      status: "Ativo",
-      teachers: selectedTeachers
-    };
-
-    setClassHistory([newClass, ...archivedHistory]);
-    setNewGradeYear('');
-    setSelectedTeachers([]);
-    setIsClassModalOpen(false);
+  const resetAnexoForm = () => {
+    setAnexoTipo(DOCUMENT_TYPES[0]);
+    setAnexoFile(null);
+    setAnexoError("");
   };
+
+  const handleUploadAnexo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAnexoError("");
+    if (!anexoFile) {
+      setAnexoError("Selecione um arquivo PDF.");
+      return;
+    }
+    if (anexoFile.type !== "application/pdf" && !anexoFile.name.toLowerCase().endsWith(".pdf")) {
+      setAnexoError("Apenas arquivos PDF são permitidos.");
+      return;
+    }
+
+    setIsUploadingAnexo(true);
+    try {
+      await apiClient.uploadDocumentacao({
+        arquivo: anexoFile,
+        aluno_id: Number(student.id),
+        tipo_documento: anexoTipo,
+      });
+      const refreshed = await apiClient.getProntuario(Number(student.id));
+      setProntuario(refreshed);
+      setIsAnexoModalOpen(false);
+      resetAnexoForm();
+    } catch (err) {
+      setAnexoError(err instanceof Error ? err.message : "Erro ao enviar anexo");
+    } finally {
+      setIsUploadingAnexo(false);
+    }
+  };
+
+  const handleViewDocumento = async (documento: Documentacao) => {
+    setDocumentoActionId(documento.id);
+    try {
+      const blob = await apiClient.fetchDocumentacaoArquivo(documento.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Erro ao visualizar documento");
+    } finally {
+      setDocumentoActionId(null);
+    }
+  };
+
+  const handleDownloadDocumento = async (documento: Documentacao) => {
+    setDocumentoActionId(documento.id);
+    try {
+      const blob = await apiClient.fetchDocumentacaoArquivo(documento.id, true);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = documento.nome_arquivo;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Erro ao baixar documento");
+    } finally {
+      setDocumentoActionId(null);
+    }
+  };
+
+  if (loadingProntuario) {
+    return <div className="p-6 text-sm text-muted-foreground">Carregando prontuário...</div>;
+  }
+  if (prontuarioError) {
+    return <div className="p-6 text-sm text-red-600">{prontuarioError}</div>;
+  }
+
+  const alunoInfo = prontuario?.aluno;
+  const responsavel = prontuario?.responsavel;
+  const responsavelNome =
+    responsavel?.nome ??
+    parseResponsavelFromObservacao(alunoInfo?.observacao) ??
+    "Não informado";
+  const contatoResponsavel = responsavel?.telefone ?? "—";
+  const contatoAluno = alunoInfo?.telefone?.trim() || "—";
+  const emailResponsavel = responsavel?.email ?? "—";
+  const cidDisplay = formatCidDisplay(alunoInfo?.cid);
+  const displayNeed = alunoInfo?.necessidade_especial ?? student.need;
+  const displayCourse = alunoInfo?.curso ?? student.course;
+  const displayYear = alunoInfo?.ano ?? student.year;
+  const dataNascimento = alunoInfo?.data_nascimento
+    ? new Date(alunoInfo.data_nascimento).toLocaleDateString("pt-BR")
+    : "—";
 
   return (
     <div className="p-6 space-y-5">
@@ -1527,38 +2030,67 @@ function StudentRecord({ student, onBack, onLog, onScheduleMeeting }: {
               </div>
               <p className="font-mono text-xs text-muted-foreground mt-0.5">Matrícula #{student.registration}</p>
               <div className="flex flex-wrap gap-2 mt-2">
-                <Badge text={student.need} color={student.needColor} />
-                <Badge text={student.course} color="gray" />
-                <Badge text={student.year} color="gray" />
+                <Badge text={displayNeed} color={needColorFor(displayNeed)} />
+                <Badge text={displayCourse} color="gray" />
+                <Badge text={displayYear} color="gray" />
               </div>
             </div>
             <div className="flex flex-col gap-2 flex-shrink-0">
-              <button onClick={onLog} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90 whitespace-nowrap" style={{ background: "var(--accent)" }}>
-                <Plus size={13} /> Registrar Atendimento
-              </button>
-              <button
-                onClick={() => onScheduleMeeting(student)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-border hover:bg-secondary transition-colors whitespace-nowrap text-foreground"
-              >
-                <CalendarDays size={13} /> Agendar Reunião
-              </button>
+              {onLog && (
+                <button onClick={onLog} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90 whitespace-nowrap" style={{ background: "var(--accent)" }}>
+                  <Plus size={13} /> Registrar Atendimento
+                </button>
+              )}
+              {onScheduleMeeting && (
+                <button
+                  onClick={() => onScheduleMeeting(student)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-border hover:bg-secondary transition-colors whitespace-nowrap text-foreground"
+                >
+                  <CalendarDays size={13} /> Agendar Reunião
+                </button>
+              )}
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border">
-            {[
-              { label: "Responsável", value: "Sra. Patrícia Moreira", icon: User },
-              { label: "Contato", value: "(67) 9 9874-3321", icon: Phone },
-              { label: "E-mail", value: "patricia.m@email.com", icon: Mail },
-              { label: "CID-10", value: "F84.0 (TEA)", icon: BookOpen },
-            ].map(f => (
-              <div key={f.label}>
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">{f.label}</p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <f.icon size={11} className="text-muted-foreground flex-shrink-0" />
-                  <p className="text-xs text-foreground truncate">{f.value}</p>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-border">
+            <div className="rounded-lg border border-border bg-secondary/10 p-4">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold mb-3">Dados do Aluno</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Data de Nascimento", value: dataNascimento, icon: CalendarDays },
+                  { label: "NEE", value: displayNeed, icon: Star },
+                  { label: "Curso", value: displayCourse, icon: GraduationCap },
+                  { label: "Semestre", value: displayYear, icon: BookOpen },
+                  { label: "CID-10", value: cidDisplay, icon: Activity },
+                  { label: "Contato", value: contatoAluno, icon: Phone },
+                ].map((f) => (
+                  <div key={f.label}>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">{f.label}</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <f.icon size={11} className="text-muted-foreground flex-shrink-0" />
+                      <p className="text-xs text-foreground truncate">{f.value}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+            <div className="rounded-lg border border-border bg-secondary/10 p-4">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold mb-3">Dados do Responsável</p>
+              <div className="space-y-3">
+                {[
+                  { label: "Nome", value: responsavelNome, icon: User },
+                  { label: "Contato", value: contatoResponsavel, icon: Phone },
+                  { label: "E-mail", value: emailResponsavel, icon: Mail },
+                ].map((f) => (
+                  <div key={f.label}>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">{f.label}</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <f.icon size={11} className="text-muted-foreground flex-shrink-0" />
+                      <p className="text-xs text-foreground truncate">{f.value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1567,10 +2099,8 @@ function StudentRecord({ student, onBack, onLog, onScheduleMeeting }: {
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="border-b border-border flex flex-wrap">
           {[
-            { key: "timeline", label: "Histórico / Linha do Tempo" }, 
-            { key: "pei", label: "Planos de Ensino (PEI)" }, 
-            { key: "requests", label: "Solicitações" },
-            { key: "classes", label: "Turmas / Semestres" } // <-- Inserido o item na navegação
+            { key: "timeline", label: "Histórico / Linha do Tempo" },
+            { key: "pei", label: "Documentos" },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-5 py-3.5 text-sm font-medium transition-all border-b-2 -mb-px ${tab === t.key ? "border-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`} style={tab === t.key ? { borderBottomColor: "var(--accent)" } : {}}>
               {t.label}
@@ -1583,7 +2113,7 @@ function StudentRecord({ student, onBack, onLog, onScheduleMeeting }: {
             <div className="relative">
               <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
               <ul className="space-y-5 pl-10">
-                {TIMELINE_EVENTS.map((ev, i) => {
+                {timelineEvents.map((ev, i) => {
                   const { icon: Icon, color, bg } = typeStyle(ev.type);
                   return (
                     <li key={i} className="relative">
@@ -1603,167 +2133,120 @@ function StudentRecord({ student, onBack, onLog, onScheduleMeeting }: {
           )}
           
           {tab === "pei" && (
-            <div className="space-y-3">
-              {([] as { title: string; date: string; author: string; status: "Ativo" | "Inativo" }[]).map((p, i) => (
-                <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-border hover:bg-secondary/20 transition-colors">
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => { resetAnexoForm(); setIsAnexoModalOpen(true); }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-all hover:opacity-90"
+                  style={{ background: "var(--accent)" }}
+                >
+                  <Upload size={14} /> ADICIONAR ANEXOS
+                </button>
+              </div>
+              {(prontuario?.documentacoes ?? []).map((p) => (
+                <div key={p.id} className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-secondary/20 transition-colors">
                   <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0"><FileText size={18} className="text-blue-600" /></div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground">{p.title}</p>
-                    <p className="text-xs text-muted-foreground">Criado em {p.date} · {p.author}</p>
+                    <p className="text-sm font-semibold text-foreground truncate">{p.nome_arquivo}</p>
+                    <p className="text-xs text-muted-foreground">{p.tipo_documento} · {new Date(p.data_upload).toLocaleDateString("pt-BR")}</p>
                   </div>
-                  <div className="flex items-center gap-2"><StatusBadge status={p.status} /><button className="p-1.5 rounded-md hover:bg-secondary transition-colors"><Download size={14} className="text-muted-foreground" /></button></div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleViewDocumento(p)}
+                      disabled={documentoActionId === p.id}
+                      title="Visualizar"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-secondary transition-colors disabled:opacity-50"
+                    >
+                      <Eye size={14} /> Visualizar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadDocumento(p)}
+                      disabled={documentoActionId === p.id}
+                      title="Baixar"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-secondary transition-colors disabled:opacity-50"
+                    >
+                      <Download size={14} /> Baixar
+                    </button>
+                  </div>
                 </div>
               ))}
-              <button className="flex items-center gap-2 text-sm font-medium mt-2 px-4 py-2 rounded-lg border border-dashed border-border text-muted-foreground hover:bg-secondary transition-colors w-full justify-center"><Plus size={14} /> Carregar Novo PEI</button>
+              {(prontuario?.documentacoes ?? []).length === 0 && (
+                <p className="text-xs text-muted-foreground">Nenhum documento cadastrado.</p>
+              )}
             </div>
           )}
           
-          {tab === "requests" && (
-            <div className="space-y-3">
-              {[
-                { type: "Prorrogação de Prazo", subject: "TCC Semestral  Banco de Dados", days: 7, date: "28/04/2025", status: "Deferida", statusColor: "green" },
-                { type: "Prorrogação de Prazo", subject: "Avaliação Unidade II  Matemática", days: 5, date: "10/03/2025", status: "Deferida", statusColor: "green" },
-                { type: "Adaptação de Avaliação", subject: "Física  Prova P2", days: null, date: "01/03/2025", status: "Pendente", statusColor: "amber" },
-              ].map((r, i) => (
-                <div key={i} className="p-4 rounded-lg border border-border flex items-start gap-3">
-                  <Clock size={16} className="text-teal-500 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap"><p className="text-sm font-semibold text-foreground">{r.type}</p><Badge text={r.status} color={r.statusColor} /></div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{r.subject} {r.days ? `· +${r.days} dias` : ""}</p>
-                    <p className="font-mono text-[10px] text-muted-foreground mt-1">Solicitado em {r.date}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 3. Renderização da nova Aba de Turmas / Semestres */}
-          {tab === "classes" && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center mb-2">
-                <div>
-                  <h4 className="text-sm font-bold text-foreground">Histórico de Enturmação Semestral</h4>
-                  <p className="text-xs text-muted-foreground">Acompanhe as turmas pelas quais o aluno passou.</p>
-                </div>
-                <button 
-                  onClick={() => setIsClassModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition shadow-xs"
-                >
-                  <Plus size={12} /> Criar Turma
-                </button>
-              </div>
-
-              {/* Lista das Turmas */}
-              <div className="space-y-3">
-                {classHistory.map((item) => {
-                  const isActive = item.status === "Ativo";
-                  return (
-                    <div key={item.id} className={`p-4 rounded-lg border ${isActive ? 'bg-blue-50/30 border-blue-200/80' : 'bg-transparent border-border'} flex flex-col gap-2`}>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className={`inline-block text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mr-2 ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-secondary text-muted-foreground'}`}>
-                            {item.schoolYear}.{item.semester}
-                          </span>
-                          <span className="text-sm font-bold text-foreground">{item.course}  {item.gradeYear}</span>
-                        </div>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
-                          {item.status}
-                        </span>
-                      </div>
-                      <div className="pt-2 border-t border-dashed border-border/60 flex flex-wrap gap-1.5 items-center">
-                        <span className="text-xs text-muted-foreground font-medium mr-1">Professores:</span>
-                        {item.teachers.map((teacher, idx) => (
-                          <span key={idx} className="text-xs bg-card border border-border px-2 py-0.5 rounded text-foreground font-medium shadow-2xs">
-                            {teacher}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* 4. Modal para o cadastro/vínculo da nova turma */}
-      {isClassModalOpen && (
+      {isAnexoModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-card border border-border rounded-xl p-5 max-w-md w-full shadow-xl">
-            <h3 className="text-base font-bold text-foreground mb-1">Enturmar em Novo Semestre</h3>
-            <p className="text-xs text-muted-foreground mb-4">Insira os parâmetros da nova fase e selecione os professores atuais.</p>
-            
-            <form onSubmit={handleCreateClass} className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-1">
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Fase/Ano</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ex: 3º Ano" 
-                    value={newGradeYear}
-                    onChange={(e) => setNewGradeYear(e.target.value)}
-                    className="w-full border border-border bg-secondary/20 rounded-md px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Ano Letivo</label>
-                  <input 
-                    type="number" 
-                    value={newSchoolYear}
-                    onChange={(e) => setNewSchoolYear(Number(e.target.value))}
-                    className="w-full border border-border bg-secondary/20 rounded-md px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Semestre</label>
-                  <select 
-                    value={newSemester}
-                    onChange={(e) => setNewSemester(Number(e.target.value))}
-                    className="w-full border border-border bg-secondary/20 rounded-md px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
-                  >
-                    <option value={1}>1º Sem.</option>
-                    <option value={2}>2º Sem.</option>
-                  </select>
-                </div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground">Adicionar Anexos</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Envie documentos (PDF).</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsAnexoModalOpen(false); resetAnexoForm(); }}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"
+              >
+                <X size={16} className="text-muted-foreground" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUploadAnexo} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento *</label>
+                <select
+                  value={anexoTipo}
+                  onChange={(e) => setAnexoTipo(e.target.value)}
+                  className="w-full border border-border bg-input-background rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {DOCUMENT_TYPES.map((tipo) => (
+                    <option key={tipo} value={tipo}>{tipo}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Professores do Semestre Atual</label>
-                <div className="border border-border bg-secondary/10 rounded-md p-2.5 max-h-36 overflow-y-auto space-y-1.5">
-                  {AVAILABLE_TEACHERS.map((teacher) => {
-                    const checked = selectedTeachers.includes(teacher);
-                    return (
-                      <label key={teacher} className="flex items-center gap-2 text-xs text-foreground cursor-pointer hover:bg-secondary/30 p-1 rounded">
-                        <input 
-                          type="checkbox" 
-                          checked={checked}
-                          onChange={() => setSelectedTeachers(prev => checked ? prev.filter(t => t !== teacher) : [...prev, teacher])}
-                          className="rounded text-blue-600 focus:ring-0 w-3.5 h-3.5"
-                        />
-                        <span>{teacher}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Arquivo PDF *</label>
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={(e) => setAnexoFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-sm text-foreground file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border file:border-border file:bg-secondary file:text-xs file:font-semibold file:text-foreground file:cursor-pointer"
+                />
+                {anexoFile && (
+                  <p className="text-xs text-muted-foreground mt-1.5">{anexoFile.name}</p>
+                )}
               </div>
 
+              {anexoError && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
+                  <AlertCircle size={14} /> {anexoError}
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <button 
-                  type="button" 
-                  onClick={() => setIsClassModalOpen(false)} 
-                  className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary rounded-md"
+                <button
+                  type="button"
+                  onClick={() => { setIsAnexoModalOpen(false); resetAnexoForm(); }}
+                  className="px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-secondary rounded-lg"
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
-                  disabled={selectedTeachers.length === 0}
-                  className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                <button
+                  type="submit"
+                  disabled={!anexoFile || isUploadingAnexo}
+                  className="px-4 py-2 text-xs font-bold text-white rounded-lg disabled:opacity-50"
+                  style={{ background: "var(--accent)" }}
                 >
-                  Confirmar Matrícula
+                  {isUploadingAnexo ? "Enviando..." : "Enviar Anexo"}
                 </button>
               </div>
             </form>
@@ -1779,17 +2262,28 @@ function LogScreen({
   onBack,
   currentUser,
   student,
+  staffList,
+  mode,
   setCareLogs,
   onActivity,
 }: {
   onBack: () => void;
   currentUser: User;
   student: Student;
+  staffList: StaffMember[];
+  mode: AppMode;
   setCareLogs: React.Dispatch<React.SetStateAction<CareLog[]>>;
   onActivity: (activity: RecentActivityInput) => void;
 }) {
+  const responsaveis = [
+    { id: currentUser.id, name: currentUser.name, role: currentUser.role },
+    ...staffList
+      .filter((member) => member.role === "Acompanhante")
+      .map((member) => ({ id: member.id, name: member.name, role: member.role })),
+  ];
   const [dragOver, setDragOver] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [responsavelId, setResponsavelId] = useState(currentUser.id);
   const [interactionType, setInteractionType] = useState("Atendimento Individual");
   const [interactionDate, setInteractionDate] = useState(new Date().toISOString().slice(0, 16));
   const [description, setDescription] = useState("");
@@ -1803,16 +2297,22 @@ function LogScreen({
         aluno_id: Number(student.id),
         tipo: interactionType,
         descricao: description.trim(),
-        data_atendimento: interactionDate,
+        data_atendimento: interactionDate.slice(0, 10),
+        responsavel_id:
+          mode === "coordenador" ? Number(responsavelId) : Number(currentUser.id),
       });
-      const { date, time } = dateParts(savedLog.data_atendimento ?? interactionDate);
+      const { date, time } = dateParts(savedLog.data_atendimento ?? interactionDate.slice(0, 10));
       const newLog: CareLog = {
         id: savedLog.id,
         studentName: student.name,
         date,
         time,
         type: savedLog.tipo || interactionType,
-        staff: currentUser.name || "Coordenação",
+        staff: staffTimelineLabel(
+          savedLog.usuario_nome,
+          savedLog.usuario_id,
+          savedLog.usuario_cargo
+        ),
         text: savedLog.descricao ?? description.trim(),
       };
       setCareLogs((current) => [newLog, ...current]);
@@ -1852,8 +2352,26 @@ function LogScreen({
                 <input type="datetime-local" value={interactionDate} onChange={e => setInteractionDate(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="col-span-2">
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Servidor Responsável</label>
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground"><Shield size={14} /><span>{currentUser.name || "Eva Maria"} - Coordenador NAPNE</span><span className="ml-auto text-[10px] font-mono bg-secondary px-1.5 py-0.5 rounded">Somente leitura</span></div>
+                <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Responsável *</label>
+                {mode === "coordenador" ? (
+                  <select
+                    value={responsavelId}
+                    onChange={(e) => setResponsavelId(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {responsaveis.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name} · {member.role}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-secondary/40 text-sm text-muted-foreground">
+                    <Shield size={14} />
+                    <span>{currentUser.name} · Acompanhante</span>
+                    <span className="ml-auto text-[10px] font-mono bg-secondary px-1.5 py-0.5 rounded">Somente leitura</span>
+                  </div>
+                )}
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wide block mb-1.5">Relato Descritivo *</label>
@@ -1883,12 +2401,13 @@ function LogScreen({
 const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students, onActivity }: {
+function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students, onActivity, canCreate = true }: {
   meetings: MeetingEvent[];
   setMeetings: React.Dispatch<React.SetStateAction<MeetingEvent[]>>;
   prefilledStudent: Student | null;
   students: Student[];
   onActivity: (activity: RecentActivityInput) => void;
+  canCreate?: boolean;
 }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -1917,16 +2436,23 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students, onA
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
+  const [requestError, setRequestError] = useState("");
+
   const handleSave = async () => {
     if (!formStudent || !formDate || !formTime) return;
+    setRequestError("");
+    const selected = students.find((s) => s.name === formStudent);
+    if (!selected?.turmaId) {
+      setRequestError("Este aluno ainda não possui turma cadastrada. Abra uma turma no prontuário do aluno.");
+      return;
+    }
     const savedMeeting = await apiClient.createReuniao({
-      tipo: formType,
-      descricao: `Aluno: ${formStudent}\n${formDesc}`,
-      data: formDate,
+      titulo: formType,
+      descricao: formDesc,
+      data_reuniao: formDate,
       horario_inicio: formTime,
       horario_fim: formTime,
-      turma_id: undefined,
-      usuario_id: undefined,
+      turma_id: selected.turmaId,
     });
 
     const newMeeting: MeetingEvent = {
@@ -1962,10 +2488,14 @@ function MeetingsScreen({ meetings, setMeetings, prefilledStudent, students, onA
           <h2 className="text-base font-bold text-foreground min-w-[180px] text-center" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{MONTH_NAMES[month]} · {year}</h2>
           <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-secondary transition-colors"><ChevronRight size={16} className="text-muted-foreground" /></button>
         </div>
-        <button onClick={() => { setShowForm(true); setFormStudent(""); setFormTeachers([]); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: "var(--accent)" }}>
-          <Plus size={15} /> Nova Reunião
-        </button>
+        {canCreate && (
+          <button onClick={() => { setShowForm(true); setFormStudent(""); setFormTeachers([]); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: "var(--accent)" }}>
+            <Plus size={15} /> Nova Reunião
+          </button>
+        )}
       </div>
+
+      {requestError && <p className="text-sm text-red-600">{requestError}</p>}
 
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Calendar grid */}
@@ -2144,12 +2674,13 @@ function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("Não disponível no backend");
-  const [role, setRole] = useState("");
+  const [cargo, setCargo] = useState("");
+  const [status, setStatus] = useState("");
   const [siape, setSiape] = useState("");
   const [tempPhoto, setTempPhoto] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileMessage, setProfileMessage] = useState("");
+  const [sessionStartedAt] = useState(() => new Date());
 
   const handleSave = () => {
     setProfileMessage("O backend ainda não possui endpoint para atualizar perfil. As informações foram carregadas do banco, mas não podem ser salvas sem uma rota PUT/PATCH de usuário.");
@@ -2166,7 +2697,8 @@ function ProfileScreen() {
         if (!active) return;
         setName(me.nome);
         setEmail(me.email);
-        setRole(me.cargo === "Coordenador" ? "Coordenador NAPNE" : me.cargo);
+        setCargo(me.cargo);
+        setStatus(me.status);
         setSiape(me.siape);
       } catch (error) {
         if (active) {
@@ -2240,7 +2772,7 @@ function ProfileScreen() {
           <div className="flex items-start justify-between mb-6">
             <div>
               <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>{name}</h2>
-              <p className="text-sm text-muted-foreground">{role}</p>
+              <p className="text-sm text-muted-foreground">{cargoDisplayLabel(cargo)}</p>
             </div>
             {!isEditing ? (
               <button
@@ -2312,32 +2844,9 @@ function ProfileScreen() {
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Telefone</label>
-              {isEditing ? (
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              ) : (
-                <p className="text-sm text-foreground">{phone}</p>
-              )}
-            </div>
-
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cargo / Função</label>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={role}
-                  onChange={e => setRole(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              ) : (
-                <p className="text-sm text-foreground">{role}</p>
-              )}
+              <p className="text-sm text-foreground">{cargoDisplayLabel(cargo)}</p>
             </div>
           </div>
 
@@ -2347,15 +2856,25 @@ function ProfileScreen() {
               <div className="flex items-center gap-2">
                 <Shield size={14} className="text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-muted-foreground">Nível de Acesso</p>
-                  <p className="text-sm text-foreground font-medium">Administrador</p>
+                  <p className="text-xs text-muted-foreground">Cargo no Sistema</p>
+                  <p className="text-sm text-foreground font-medium">{cargoDisplayLabel(cargo)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Clock size={14} className="text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-muted-foreground">ltimo Acesso</p>
-                  <p className="text-sm text-foreground font-medium">{new Date().toLocaleDateString("pt-BR")} às 14:32</p>
+                  <p className="text-xs text-muted-foreground">Status da Conta</p>
+                  <p className="text-sm text-foreground font-medium">{status || "—"}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 md:col-span-2">
+                <Activity size={14} className="text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Sessão Atual</p>
+                  <p className="text-sm text-foreground font-medium">
+                    {sessionStartedAt.toLocaleDateString("pt-BR")} às{" "}
+                    {sessionStartedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
                 </div>
               </div>
             </div>
@@ -2383,34 +2902,29 @@ function PlaceholderScreen({ label }: { label: string }) {
 export default function App({
   currentUser: loggedInUser,
   onLogout,
+  mode = "coordenador",
 }: {
   currentUser: LoggedInUser;
   onLogout: () => void;
+  mode?: AppMode;
 }) {
   const currentUser: User = {
-    id: loggedInUser.siape,
+    id: String(loggedInUser.id || loggedInUser.siape),
     siape: loggedInUser.siape,
     name: loggedInUser.name,
-    email: "",
-    role: "Coordenadora",
+    email: loggedInUser.email,
+    role: loggedInUser.cargo === "Coordenador" ? "Coordenador" : "Acompanhante",
   };
   const [activeNav, setActiveNav] = useState<Screen>("overview");
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
-  const [careLogs, setCareLogs] = useState<CareLog[]>(INITIAL_TIMELINE_EVENTS);
+  const [careLogs, setCareLogs] = useState<CareLog[]>([]);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-  const [meetings, setMeetings] = useState<MeetingEvent[]>(INITIAL_MEETINGS);
+  const [meetings, setMeetings] = useState<MeetingEvent[]>([]);
   const [meetingPrefilledStudent, setMeetingPrefilledStudent] = useState<Student | null>(null);
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
-
-  const [students, setStudents] = useState<Student[]>(STUDENTS);
-
-  const [staffList, setStaffList] = useState<StaffMember[]>(
-    INITIAL_STAFF.map(member => ({
-      ...member,
-      students: STUDENTS.filter(student => student.teachers.includes(member.name)),
-    }))
-  );
+  const [students, setStudents] = useState<Student[]>([]);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
 
   const addRecentActivity = (activity: RecentActivityInput) => {
     const fallback = dateParts();
@@ -2431,18 +2945,24 @@ export default function App({
 
     const loadBackendData = async () => {
       try {
-        const [backendStudents, backendMeetings, backendUsers, backendAtendimentos] = await Promise.all([
+        const [backendStudents, backendMeetings, backendTurmas] = await Promise.all([
           apiClient.getAlunos(),
           apiClient.getReunioes(),
-          apiClient.getUsuarios({ apenas_ativos: true }),
-          apiClient.getAtendimentos(),
+          apiClient.getTurmas(),
         ]);
+
+        let backendUsers: BackendUsuario[] = [];
+        const backendAtendimentos = await apiClient.getAtendimentos();
+        if (mode === "coordenador") {
+          backendUsers = await apiClient.getUsuarios({ apenas_ativos: true });
+        }
 
         if (!active) return;
 
-        const mappedStudents = backendStudents.map(toStudent);
-        const mappedMeetings = backendMeetings.map(toMeeting);
+        const turmaByAluno = new Map(backendTurmas.map((t) => [t.aluno_id, t]));
+        const mappedStudents = backendStudents.map((s) => toStudent(s, turmaByAluno));
         const studentsById = new Map(mappedStudents.map((student) => [Number(student.id), student]));
+        const mappedMeetings = backendMeetings.map((m) => toMeeting(m, studentsById));
         const usersById = new Map(backendUsers.map((user) => [user.id, user]));
         const mappedCareLogs = backendAtendimentos.map((atendimento) => toCareLog(atendimento, studentsById, usersById));
 
@@ -2464,21 +2984,7 @@ export default function App({
     return () => {
       active = false;
     };
-  }, []);
-
-  // Filtrar estudantes baseado no role do usuário
-  const getVisibleStudents = (): Student[] => {
-    if (!currentUser) return [];
-    if (currentUser.role === "Coordenadora") {
-      return students; // Coordenadora vê todos
-    } else if (currentUser.role === "Acompanhadora") {
-      // Acompanhadora vê apenas seus alunos
-      const accompStudentIds = ACOMPANHADORA_STUDENTS[currentUser.id] || [];
-      return students.filter(s => accompStudentIds.includes(s.id));
-    }
-    return [];
-  };
-
+  }, [mode]);
 
   const handleNav = (s: Screen) => {
     setActiveNav(s);
@@ -2516,6 +3022,13 @@ export default function App({
   };
 
 
+  const navItems = mode === "coordenador" ? NAV_ITEMS_COORDENADOR : NAV_ITEMS_ACOMPANHANTE;
+  const roleLabel = appRoleLabel(loggedInUser.role);
+  const availableStudents =
+    mode === "acompanhante"
+      ? students.filter((student) => student.companionId === String(loggedInUser.id))
+      : students;
+
   const TITLES: Record<Screen, string> = {
     overview: "Visão Geral",
     students: selectedStudent ? "Prontuário Eletrônico" : "Gestão de Alunos",
@@ -2529,11 +3042,11 @@ export default function App({
   return (
     <div className="flex h-screen overflow-hidden bg-background" style={{ fontFamily: "Inter, sans-serif" }}>
       <div className="w-60 flex-shrink-0">
-        <Sidebar current={activeNav} onNav={handleNav} onLogout={handleLogout} currentUser={currentUser} studentCount={students.length} />
+        <Sidebar current={activeNav} onNav={handleNav} onLogout={handleLogout} currentUser={currentUser} studentCount={students.length} navItems={navItems} roleLabel={roleLabel} />
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Topbar title={TITLES[activeNav]} onOpenProfile={handleOpenProfile} currentUser={currentUser} />
+        <Topbar title={TITLES[activeNav]} onOpenProfile={handleOpenProfile} currentUser={currentUser} roleLabel={roleLabel} />
 
         {/* Breadcrumb for student record */}
         {activeNav === "students" && selectedStudent && !showLog && (
@@ -2568,13 +3081,14 @@ export default function App({
               setStaffList={setStaffList}
               onSelectStudent={handleSelectStudent}
               onActivity={addRecentActivity}
+              canDeleteStudent={mode === "coordenador"}
             />}
           {activeNav === "students" && selectedStudent && !showLog && (
             <StudentRecord
               student={students.find((student) => student.id === selectedStudent)!}
               onBack={() => setSelectedStudent(null)}
               onLog={() => setShowLog(true)}
-              onScheduleMeeting={handleScheduleMeeting}
+              onScheduleMeeting={mode === "coordenador" ? handleScheduleMeeting : undefined}
             />
           )}
           {activeNav === "students" && selectedStudent && showLog && (
@@ -2582,6 +3096,8 @@ export default function App({
               onBack={() => setShowLog(false)}
               currentUser={currentUser}
               student={students.find((student) => student.id === selectedStudent)!}
+              staffList={staffList}
+              mode={mode}
               setCareLogs={setCareLogs}
               onActivity={addRecentActivity}
             />
@@ -2592,7 +3108,7 @@ export default function App({
               onAddLogClick={() => setIsLogModalOpen(true)} 
             />
           )}
-          {activeNav === "servers" && (
+          {activeNav === "servers" && mode === "coordenador" && (
             <CorpoDocenteView staffList={staffList} setStaffList={setStaffList} onActivity={addRecentActivity} />
           )}
           {activeNav === "meetings" && (
@@ -2602,11 +3118,26 @@ export default function App({
               prefilledStudent={meetingPrefilledStudent}
               students={students}
               onActivity={addRecentActivity}
+              canCreate={mode === "coordenador"}
             />
           )}
           {activeNav === "profile" && <ProfileScreen />}
         </main>
       </div>
+
+      {isLogModalOpen && (
+        <AtendimentoModal
+          students={availableStudents}
+          currentUser={currentUser}
+          staffList={staffList}
+          mode={mode}
+          onClose={() => setIsLogModalOpen(false)}
+          onSaved={(log) => {
+            setCareLogs((current) => [log, ...current]);
+            addRecentActivity(activityFromCareLog(log));
+          }}
+        />
+      )}
     </div>
   );
 }

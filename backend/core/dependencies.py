@@ -1,7 +1,7 @@
 from fastapi.security import OAuth2PasswordBearer
 from core import verify_token
 from fastapi import Depends, HTTPException
-from models import Usuario, StatusUsuario, Cargo, Turma
+from models import Usuario, StatusUsuario, Cargo, Turma, Aluno, StatusAluno
 from database import get_db
 from sqlalchemy.orm import Session
 
@@ -63,8 +63,18 @@ def usuario_pode_registrar_em_turma(usuario: Usuario, turma_id: int, db: Session
 
 
 def ids_alunos_visiveis_usuario(usuario: Usuario, db: Session) -> list[int] | None:
-    if usuario.cargo in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
+    if usuario.cargo == Cargo.COORDENADOR:
         return None
+    if usuario.cargo == Cargo.ACOMPANHANTE:
+        rows = (
+            db.query(Aluno.id)
+            .filter(
+                Aluno.acompanhante_id == usuario.id,
+                Aluno.status == StatusAluno.ATIVO,
+            )
+            .all()
+        )
+        return [row[0] for row in rows]
     return []
 
 
@@ -86,7 +96,12 @@ def require_professor_in_turma(
 
 
 def usuario_pode_ver_prontuario(usuario: Usuario, aluno_id: int, db: Session) -> bool:
-    return usuario.cargo in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE)
+    if usuario.cargo == Cargo.COORDENADOR:
+        return True
+    if usuario.cargo == Cargo.ACOMPANHANTE:
+        aluno = db.query(Aluno).filter(Aluno.id == aluno_id).first()
+        return aluno is not None and aluno.acompanhante_id == usuario.id
+    return False
 
 
 def apply_prontuario_permissions(

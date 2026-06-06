@@ -106,7 +106,7 @@ def _montar_prontuario_completo(aluno: Aluno, db: Session) -> dict:
         "turmas": [_turma_data(t) for t in turmas],
         "professores": professores,
         "documentacoes": [_documentacao_data(d) for d in documentacoes],
-        "atendimentos": [_atendimento_data(a) for a in atendimentos],
+        "atendimentos": [_atendimento_data(a, db=db) for a in atendimentos],
         "ocorrencias": [_ocorrencia_data(o, db=db) for o in ocorrencias],
         "reunioes": [_reuniao_data(r, db) for r in reunioes],
         "solicitacoes": [_solicitacao_data(s, db) for s in solicitacoes],

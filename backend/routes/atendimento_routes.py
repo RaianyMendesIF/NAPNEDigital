@@ -31,10 +31,11 @@ def list_atendimentos(
     data_inicial: date | None = Query(default=None),
     data_final: date | None = Query(default=None),
     db: Session = Depends(get_db),
-    _user=Depends(require_atendimento_permission),
+    current_user=Depends(require_atendimento_permission),
 ):
     return list_atendimentos_service(
         db,
+        usuario=current_user,
         aluno_id=aluno_id,
         data_inicial=data_inicial,
         data_final=data_final,

@@ -2,12 +2,22 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from core.dependencies import ids_alunos_visiveis_usuario
-from models import Aluno, Responsavel, StatusAluno, Usuario
+from models import Aluno, Cargo, Responsavel, StatusAluno, Usuario
 from schemas import AlunoCreate, AlunoUpdate
 from utils import error_message, success_message
 
 
-def _aluno_data(aluno: Aluno) -> dict:
+def _aluno_data(aluno: Aluno, db: Session | None = None) -> dict:
+    acompanhante_nome = None
+    if aluno.acompanhante_id and db is not None:
+        acompanhante = (
+            db.query(Usuario)
+            .filter(Usuario.id == aluno.acompanhante_id)
+            .first()
+        )
+        if acompanhante:
+            acompanhante_nome = acompanhante.nome
+
     return {
         "id": aluno.id,
         "matricula": aluno.matricula,
@@ -21,6 +31,8 @@ def _aluno_data(aluno: Aluno) -> dict:
         "cid": aluno.cid,
         "observacao": aluno.observacao,
         "responsavel_id": aluno.responsavel_id,
+        "acompanhante_id": aluno.acompanhante_id,
+        "acompanhante_nome": acompanhante_nome,
         "status": aluno.status.value if hasattr(aluno.status, "value") else aluno.status,
         "ativo": aluno.status == StatusAluno.ATIVO,
     }
@@ -35,10 +47,25 @@ def _validate_responsavel(responsavel_id: int | None, db: Session):
     return None
 
 
+def _validate_acompanhante(acompanhante_id: int | None, db: Session):
+    if acompanhante_id is None:
+        return None
+    acompanhante = db.query(Usuario).filter(Usuario.id == acompanhante_id).first()
+    if not acompanhante:
+        return error_message("Acompanhante não encontrado", 404)
+    if acompanhante.cargo != Cargo.ACOMPANHANTE:
+        return error_message("O usuário informado não é um acompanhante", 400)
+    return None
+
+
 def create_aluno_service(data: AlunoCreate, db: Session):
     responsavel_error = _validate_responsavel(data.responsavel_id, db)
     if responsavel_error:
         return responsavel_error
+
+    acompanhante_error = _validate_acompanhante(data.acompanhante_id, db)
+    if acompanhante_error:
+        return acompanhante_error
 
     existing = (
         db.query(Aluno)
@@ -62,13 +89,14 @@ def create_aluno_service(data: AlunoCreate, db: Session):
         cid=data.cid,
         observacao=data.observacao,
         responsavel_id=data.responsavel_id,
+        acompanhante_id=data.acompanhante_id,
         status=StatusAluno.ATIVO,
     )
     db.add(aluno)
     db.commit()
     db.refresh(aluno)
     return success_message(
-        data=_aluno_data(aluno),
+        data=_aluno_data(aluno, db),
         message="Aluno criado com sucesso",
     )
 
@@ -101,7 +129,7 @@ def list_alunos_service(
         )
     alunos = query.order_by(Aluno.nome).all()
     return success_message(
-        data=[_aluno_data(a) for a in alunos],
+        data=[_aluno_data(a, db) for a in alunos],
         message="Alunos listados com sucesso",
     )
 
@@ -116,7 +144,7 @@ def get_aluno_service(aluno_id: int, db: Session, usuario: Usuario | None = None
         if ids_visiveis is not None and aluno_id not in ids_visiveis:
             return error_message("Sem permissão para visualizar este aluno", 403)
     return success_message(
-        data=_aluno_data(aluno),
+        data=_aluno_data(aluno, db),
         message="Aluno encontrado",
     )
 
@@ -132,6 +160,11 @@ def update_aluno_service(aluno_id: int, data: AlunoUpdate, db: Session):
         responsavel_error = _validate_responsavel(updates["responsavel_id"], db)
         if responsavel_error:
             return responsavel_error
+
+    if "acompanhante_id" in updates:
+        acompanhante_error = _validate_acompanhante(updates["acompanhante_id"], db)
+        if acompanhante_error:
+            return acompanhante_error
 
     if "cpf" in updates and updates["cpf"] != aluno.cpf:
         cpf_exists = (
@@ -161,7 +194,7 @@ def update_aluno_service(aluno_id: int, data: AlunoUpdate, db: Session):
     db.commit()
     db.refresh(aluno)
     return success_message(
-        data=_aluno_data(aluno),
+        data=_aluno_data(aluno, db),
         message="Aluno atualizado com sucesso",
     )
 
@@ -178,6 +211,6 @@ def deactivate_aluno_service(aluno_id: int, db: Session):
     db.commit()
     db.refresh(aluno)
     return success_message(
-        data=_aluno_data(aluno),
+        data=_aluno_data(aluno, db),
         message="Aluno desativado com sucesso",
     )

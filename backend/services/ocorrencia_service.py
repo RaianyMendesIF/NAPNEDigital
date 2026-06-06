@@ -29,6 +29,14 @@ def _ocorrencia_data(
         ano_letivo = turma.ano_letivo
         aluno_id = turma.aluno_id
 
+    usuario_nome = None
+    usuario_cargo = None
+    if db is not None:
+        usuario = db.query(Usuario).filter(Usuario.id == ocorrencia.usuario_id).first()
+        if usuario:
+            usuario_nome = usuario.nome
+            usuario_cargo = usuario.cargo.value if hasattr(usuario.cargo, "value") else usuario.cargo
+
     return {
         "id": ocorrencia.id,
         "turma_id": ocorrencia.turma_id,
@@ -36,6 +44,8 @@ def _ocorrencia_data(
         "semestre": semestre,
         "ano_letivo": ano_letivo,
         "usuario_id": ocorrencia.usuario_id,
+        "usuario_nome": usuario_nome,
+        "usuario_cargo": usuario_cargo,
         "titulo": ocorrencia.titulo,
         "descricao": ocorrencia.descricao,
         "data_registro": ocorrencia.data_registro,
@@ -73,7 +83,7 @@ def create_ocorrencia_service(
     db.commit()
     db.refresh(ocorrencia)
     return success_message(
-        data=_ocorrencia_data(ocorrencia, turma),
+        data=_ocorrencia_data(ocorrencia, turma, db=db),
         message="Ocorrência registrada com sucesso",
     )
 

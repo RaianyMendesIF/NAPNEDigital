@@ -1,34 +1,75 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { User, Shield, AlertCircle } from "lucide-react";
 import CoordenadorApp from "./coordenador";
-import AcompanhantesApp from "./acompanhantes";
 import { apiClient } from "../services/api";
+import { cargoToAppRole, type AppRole } from "../lib/auth";
 
 export interface LoggedInUser {
   id: number;
   siape: string;
   name: string;
-  role: "coordenador" | "acompanhante";
+  email: string;
+  cargo: string;
+  role: AppRole;
+}
+
+function mapMeToUser(me: { id?: number; siape: string; nome: string; cargo: string; email: string }, id = 0): LoggedInUser {
+  return {
+    id: me.id ?? id,
+    siape: me.siape,
+    name: me.nome,
+    email: me.email,
+    cargo: me.cargo,
+    role: cargoToAppRole(me.cargo),
+  };
 }
 
 export default function App() {
   const [loggedInUser, setLoggedInUser] = useState<LoggedInUser | null>(null);
+  const [bootstrapping, setBootstrapping] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    const restoreSession = async () => {
+      if (!apiClient.getToken()) {
+        if (active) setBootstrapping(false);
+        return;
+      }
+
+      try {
+        const me = await apiClient.getMe();
+        if (active) setLoggedInUser(mapMeToUser(me));
+      } catch {
+        apiClient.clearToken();
+      } finally {
+        if (active) setBootstrapping(false);
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleLogout = () => {
     apiClient.clearToken();
     setLoggedInUser(null);
   };
 
-  if (loggedInUser) {
-    if (loggedInUser.role === "coordenador") {
-      return <CoordenadorApp currentUser={loggedInUser} onLogout={handleLogout} />;
-    }
-
+  if (bootstrapping) {
     return (
-      <AcompanhantesApp
-        currentUser={loggedInUser}
-        onLogout={handleLogout}
-      />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--primary)" }}>
+        <p className="text-white text-sm">Carregando sessão...</p>
+      </div>
     );
+  }
+
+  if (loggedInUser) {
+    const mode = loggedInUser.role === "coordenador" ? "coordenador" : "acompanhante";
+    return <CoordenadorApp currentUser={loggedInUser} onLogout={handleLogout} mode={mode} />;
   }
 
   return <LoginScreen onLoginSuccess={setLoggedInUser} />;
@@ -65,10 +106,7 @@ function LoginScreen({
         apiClient.setToken(response.data.access_token);
         const currentUser = await apiClient.getMe();
         onLoginSuccess({
-          id: response.data.usuario_id,
-          siape: currentUser.siape,
-          name: currentUser.nome,
-          role: currentUser.cargo === "Coordenador" ? "coordenador" : "acompanhante",
+          ...mapMeToUser(currentUser, response.data.usuario_id),
         });
         return;
       }
@@ -205,9 +243,12 @@ function LoginScreen({
               {loading ? "Autenticando..." : "Entrar no sistema"}
             </button>
           </form>
+
+          <p className="text-xs text-muted-foreground mt-6 text-center">
+            Desenvolvimento: SIAPE <span className="font-mono">1234567</span> · senha <span className="font-mono">mudar123</span>
+          </p>
         </div>
       </div>
     </div>
   );
 }
-

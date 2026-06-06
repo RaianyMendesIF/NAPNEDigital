@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { LoggedInUser } from "./App";
 import { apiClient } from "../services/api";
+import { appRoleLabel } from "../lib/auth";
 import type {
   Aluno as BackendAluno,
   Reuniao as BackendReuniao,
@@ -36,7 +37,6 @@ type Screen =
   | "overview"
   | "students"
   | "record"
-  | "log"
   | "meetings"
   | "occurrences"
   | "profile";
@@ -93,7 +93,6 @@ interface CareLog {
 const NAV_ITEMS = [
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
   { id: "students", label: "Alunos", icon: Users },
-  { id: "log", label: "Atendimentos", icon: Activity },
   { id: "meetings", label: "Reuniões", icon: CalendarDays },
   { id: "occurrences", label: "Ocorrências", icon: AlertTriangle },
 ];
@@ -166,23 +165,21 @@ const toCareLog = (atendimento: BackendAtendimento, studentsById: Map<number, St
   text: atendimento.descricao ?? "",
 });
 
-const toOccurrence = (ocorrencia: BackendOcorrencia, currentUserName: string): Occurrence => {
-  const [studentLine, subjectLine, ...descriptionLines] = ocorrencia.descricao.split("\n");
-
-  return {
-    id: ocorrencia.id,
-    studentName: studentLine?.startsWith("Aluno: ")
-      ? studentLine.replace("Aluno: ", "").trim()
-      : "Aluno não informado",
-    subject: subjectLine?.startsWith("Disciplina: ")
-      ? subjectLine.replace("Disciplina: ", "").trim()
-      : "Não especificado",
-    title: ocorrencia.titulo,
-    description: descriptionLines.join("\n").trim() || ocorrencia.descricao,
-    date: new Date(`${ocorrencia.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
-    author: currentUserName,
-  };
-};
+const toOccurrence = (
+  ocorrencia: BackendOcorrencia,
+  currentUserName: string,
+  studentsById: Map<number, Student> = new Map()
+): Occurrence => ({
+  id: ocorrencia.id,
+  studentName: ocorrencia.aluno_id
+    ? studentsById.get(ocorrencia.aluno_id)?.name ?? `Aluno #${ocorrencia.aluno_id}`
+    : "Aluno não informado",
+  subject: "—",
+  title: ocorrencia.titulo,
+  description: ocorrencia.descricao,
+  date: new Date(`${ocorrencia.data_registro}T00:00:00`).toLocaleDateString("pt-BR"),
+  author: currentUserName,
+});
 
 const Badge = ({ text, color = "blue" }: { text: string; color?: string }) => {
   const map: Record<string, string> = {
@@ -298,7 +295,7 @@ function Sidebar({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-white text-xs font-semibold truncate">{currentUser.name}</p>
-            <p className="text-[10px]" style={{ color: "var(--sidebar-foreground)" }}>Acompanhante</p>
+            <p className="text-[10px]" style={{ color: "var(--sidebar-foreground)" }}>{appRoleLabel(currentUser.role)}</p>
           </div>
           <button
             type="button"
@@ -371,7 +368,7 @@ function Topbar({
               {currentUser.name}
             </p>
             <p className="text-[10px] text-muted-foreground leading-tight">
-              Acompanhante
+              {appRoleLabel(currentUser.role)}
             </p>
           </div>
 
@@ -385,40 +382,37 @@ function Topbar({
 function OverviewScreen({
   students,
   meetings,
-  careLogs,
   occurrences,
   onNav,
 }: {
   students: Student[];
   meetings: MeetingEvent[];
-  careLogs: CareLog[];
   occurrences: Occurrence[];
   onNav: (s: Screen) => void;
 }) {
   return (
     <div className="p-6 space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={Users} label="Meus Alunos" value={students.length} sub="Vinculados a você" color="bg-primary" onClick={() => onNav("students")} />
-        <KpiCard icon={Activity} label="Meus Atendimentos" value={careLogs.length} sub="Registrados por você" color="bg-amber-500" onClick={() => onNav("log")} />
-        <KpiCard icon={CalendarDays} label="Minhas Reuniões" value={meetings.length} sub="Agenda vinculada" color="bg-indigo-600" onClick={() => onNav("meetings")} />
-        <KpiCard icon={AlertTriangle} label="Minhas Ocorrências" value={occurrences.length} sub="Registradas por você" color="bg-red-500" onClick={() => onNav("occurrences")} />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <KpiCard icon={Users} label="Alunos" value={students.length} sub="Turmas vinculadas" color="bg-primary" onClick={() => onNav("students")} />
+        <KpiCard icon={CalendarDays} label="Reuniões" value={meetings.length} sub="Agenda do NAPNE" color="bg-indigo-600" onClick={() => onNav("meetings")} />
+        <KpiCard icon={AlertTriangle} label="Ocorrências" value={occurrences.length} sub="Registradas" color="bg-red-500" onClick={() => onNav("occurrences")} />
       </div>
 
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="px-5 py-4 border-b border-border">
-          <h2 className="text-sm font-bold text-foreground">Atividade Recente</h2>
+          <h2 className="text-sm font-bold text-foreground">Ocorrências recentes</h2>
         </div>
         <div className="divide-y divide-border">
-          {careLogs.slice(0, 5).map((log) => (
-            <div key={log.id} className="p-5">
-              <p className="text-sm font-bold text-foreground">{log.studentName}</p>
-              <p className="text-xs text-muted-foreground">{log.type} · {log.date} às {log.time}</p>
-              <p className="text-sm text-muted-foreground mt-2">{log.text}</p>
+          {occurrences.slice(0, 5).map((occurrence) => (
+            <div key={occurrence.id} className="p-5">
+              <p className="text-sm font-bold text-foreground">{occurrence.studentName}</p>
+              <p className="text-xs text-muted-foreground">{occurrence.title} · {occurrence.date}</p>
+              <p className="text-sm text-muted-foreground mt-2">{occurrence.description}</p>
             </div>
           ))}
-          {careLogs.length === 0 && (
+          {occurrences.length === 0 && (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              Nenhum atendimento registrado por você.
+              Nenhuma ocorrência registrada.
             </div>
           )}
         </div>
@@ -440,14 +434,6 @@ function StudentsScreen({
 }) {
   const [search, setSearch] = useState("");
   const [filterNeed, setFilterNeed] = useState("Todas");
-  const [showModal, setShowModal] = useState(false);
-  const [modalStep, setModalStep] = useState(1);
-
-  const [newStudentName, setNewStudentName] = useState("");
-  const [newRegistration, setNewRegistration] = useState("");
-  const [newCourse, setNewCourse] = useState("Técnico em Informática");
-  const [newYear, setNewYear] = useState("1º Ano");
-  const [newNeed, setNewNeed] = useState("");
 
   const needs = ["Todas", ...Array.from(new Set(students.map((student) => student.need).filter(Boolean)))];
 
@@ -457,40 +443,6 @@ function StudentsScreen({
       (student.name.toLowerCase().includes(search.toLowerCase()) ||
         student.registration.includes(search))
   );
-
-  const handleSaveStudent = async () => {
-    if (!newStudentName.trim() || !newRegistration.trim()) return;
-
-    const savedStudent = await apiClient.createAluno({
-      matricula: newRegistration.trim(),
-      nome: newStudentName.trim(),
-      data_nascimento: "2000-01-01",
-      cpf: `000${newRegistration.trim()}`.slice(-11),
-      telefone: "",
-      curso: newCourse,
-      ano: newYear,
-      necessidade_especial: newNeed,
-      cid: "Não informado",
-      observacao: "",
-    });
-
-    const newStudent: Student = {
-      ...toStudent(savedStudent, currentUser.name),
-      needColor: needColorFor(newNeed),
-      teachers: [currentUser.name],
-      lastCareDate: new Date().toISOString().slice(0, 10),
-    };
-
-    setStudents((prev) => [...prev, newStudent]);
-
-    setNewStudentName("");
-    setNewRegistration("");
-    setNewCourse("Técnico em Informática");
-    setNewYear("1º Ano");
-    setNewNeed("");
-    setShowModal(false);
-    setModalStep(1);
-  };
 
   return (
     <div className="p-6 space-y-5">
@@ -577,210 +529,33 @@ function StudentsScreen({
         )}
       </div>
 
-      {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(13,28,54,0.7)" }}
-        >
-          <div className="bg-card rounded-xl border border-border w-full max-w-xl shadow-2xl">
-            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <div>
-                <p className="font-bold text-foreground">Adicionar Novo Aluno</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Etapa {modalStep} de 3:{" "}
-                  {modalStep === 1
-                    ? "Dados Pessoais"
-                    : modalStep === 2
-                      ? "Informações Acadêmicas"
-                      : "Anamnese Inicial"}
-                </p>
-              </div>
-
-              <button
-                onClick={() => setShowModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"
-              >
-                <X size={16} className="text-muted-foreground" />
-              </button>
-            </div>
-
-            <div className="px-6 pt-5 flex items-center gap-2">
-              {[1, 2, 3].map((step) => (
-                <div
-                  key={step}
-                  className="flex-1 h-1.5 rounded-full transition-all"
-                  style={step <= modalStep ? { background: "var(--accent)" } : { background: "var(--secondary)" }}
-                />
-              ))}
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
-              {modalStep === 1 && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className="text-xs font-medium text-foreground block mb-1">Nome Completo *</label>
-                    <input
-                      value={newStudentName}
-                      onChange={(e) => setNewStudentName(e.target.value)}
-                      placeholder="Ex: João Carlos da Silva"
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">Matrícula *</label>
-                    <input
-                      value={newRegistration}
-                      onChange={(e) => setNewRegistration(e.target.value)}
-                      placeholder="2025001"
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">CPF</label>
-                    <input
-                      placeholder="000.000.000-00"
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">Data de Nascimento</label>
-                    <input
-                      type="date"
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">Contato / WhatsApp</label>
-                    <input
-                      placeholder="(67) 9 9999-9999"
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {modalStep === 2 && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">Curso *</label>
-                    <select
-                      value={newCourse}
-                      onChange={(e) => setNewCourse(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option>Técnico em Informática</option>
-                      <option>Técnico em Eletrotécnica</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">Ano / Turma *</label>
-                    <select
-                      value={newYear}
-                      onChange={(e) => setNewYear(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option>1º Ano</option>
-                      <option>2º Ano</option>
-                      <option>3º Ano</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="text-xs font-medium text-foreground block mb-1">NEE *</label>
-                    <input
-                      value={newNeed}
-                      onChange={(e) => setNewNeed(e.target.value)}
-                      placeholder="Informe a necessidade educacional específica"
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="text-xs font-medium text-foreground block mb-1">CID-10</label>
-                    <input
-                      placeholder="Ex: F84.0"
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {modalStep === 3 && (
-                <div className="space-y-3">
-                  <p className="text-xs text-muted-foreground">
-                    Informações da entrevista familiar inicial (Anamnese).
-                  </p>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">Nome do Responsável Principal</label>
-                    <input
-                      placeholder="Nome completo"
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">Histórico Médico / Diagnóstico Resumido</label>
-                    <textarea
-                      rows={3}
-                      placeholder="Descreva o histórico do aluno..."
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1">Observações / Preferências de Comunicação</label>
-                    <textarea
-                      rows={2}
-                      placeholder="Outras informações relevantes..."
-                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 pb-5 flex items-center justify-between gap-3">
-              <button
-                onClick={() => modalStep > 1 ? setModalStep((step) => step - 1) : setShowModal(false)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors"
-              >
-                {modalStep > 1 ? "Voltar" : "Cancelar"}
-              </button>
-
-              <button
-                onClick={() => modalStep < 3 ? setModalStep((step) => step + 1) : handleSaveStudent()}
-                className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
-                style={{ background: modalStep === 3 ? "var(--accent)" : "var(--primary)" }}
-              >
-                {modalStep === 3 ? "Salvar Cadastro" : "Próxima Etapa"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
-
-    
   );
-
-  
 }
 
 function StudentRecord({
   student,
-  careLogs,
   onBack,
 }: {
   student: Student;
-  careLogs: CareLog[];
   onBack: () => void;
 }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [prontuario, setProntuario] = useState<Awaited<ReturnType<typeof apiClient.getProntuario>> | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    apiClient.getProntuario(Number(student.id))
+      .then((data) => { if (active) setProntuario(data); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Erro ao carregar prontuário"); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [student.id]);
+
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">Carregando prontuário...</div>;
+  if (error) return <div className="p-6 text-sm text-red-600">{error}</div>;
+
   return (
     <div className="p-6 space-y-5">
       <button onClick={onBack} className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -799,20 +574,14 @@ function StudentRecord({
 
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="px-5 py-4 border-b border-border">
-          <h3 className="text-sm font-bold text-foreground">Atendimentos deste aluno registrados por você</h3>
+          <h3 className="text-sm font-bold text-foreground">Ocorrências</h3>
         </div>
-        <div className="divide-y divide-border">
-          {careLogs.map((log) => (
-            <div key={log.id} className="p-5">
-              <p className="text-sm font-semibold text-foreground">{log.type}</p>
-              <p className="text-xs text-muted-foreground">{log.date} às {log.time} · {log.staff}</p>
-              <p className="text-sm text-muted-foreground mt-2">{log.text}</p>
-            </div>
+        <div className="divide-y divide-border p-5 space-y-3">
+          {(prontuario?.ocorrencias ?? []).map((o) => (
+            <p key={o.id} className="text-sm"><strong>{o.titulo}</strong> · {o.data_registro}</p>
           ))}
-          {careLogs.length === 0 && (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              Nenhum atendimento seu para este aluno.
-            </div>
+          {(prontuario?.ocorrencias ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhuma ocorrência registrada.</p>
           )}
         </div>
       </div>
@@ -1261,17 +1030,6 @@ function MeetingsScreen({
           </button>
         </div>
 
-        <button
-          onClick={() => {
-            setShowForm(true);
-            setFormStudent("");
-            setFormTeachers([]);
-          }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
-          style={{ background: "var(--accent)" }}
-        >
-          <Plus size={15} /> Nova Reunião
-        </button>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
@@ -1940,11 +1698,10 @@ export default function AcompanhantesApp({
       setIsLoadingData(true);
       setLoadError("");
       try {
-        const [backendStudents, backendMeetings, backendOccurrences, backendAtendimentos, backendTurmas] = await Promise.all([
+        const [backendStudents, backendMeetings, backendOccurrences, backendTurmas] = await Promise.all([
           apiClient.getAlunos(),
           apiClient.getReunioes(),
           apiClient.getOcorrencias(),
-          apiClient.getAtendimentos(),
           apiClient.getTurmas(),
         ]);
 
@@ -1955,8 +1712,8 @@ export default function AcompanhantesApp({
         const studentsById = new Map(mappedStudents.map((student) => [Number(student.id), student]));
         setStudents(mappedStudents);
         setMeetings(backendMeetings.map((meeting) => toMeeting(meeting, currentUserName)));
-        setOccurrences(backendOccurrences.map((occurrence) => toOccurrence(occurrence, currentUserName)));
-        setCareLogs(backendAtendimentos.map((atendimento) => toCareLog(atendimento, studentsById, currentUserName)));
+        setOccurrences(backendOccurrences.map((occurrence) => toOccurrence(occurrence, currentUserName, studentsById)));
+        setCareLogs([]);
       } catch (error) {
         console.error("Erro ao carregar dados do backend:", error);
         if (active) {
@@ -1976,47 +1733,21 @@ export default function AcompanhantesApp({
     };
   }, [currentUserName]);
 
-  const visibleStudents = useMemo(
-    () => {
-      const linkedStudentNames = new Set(
-        careLogs
-          .filter((log) => log.userId === currentUser.id)
-          .map((log) => log.studentName)
-      );
-      return students.filter((student) => linkedStudentNames.has(student.name));
-    },
-    [students, careLogs, currentUser.id]
-  );
+  const visibleStudents = students;
 
-  const visibleCareLogs = useMemo(
-    () => careLogs.filter((log) => log.userId === currentUser.id),
-    [careLogs, currentUser.id]
-  );
+  const visibleMeetings = meetings;
 
-  const visibleMeetings = useMemo(
-    () => meetings.filter((meeting) => visibleStudents.some((student) => student.name === meeting.studentName)),
-    [meetings, visibleStudents]
-  );
-
-  const visibleOccurrences = useMemo(
-    () => occurrences.filter((occurrence) => visibleStudents.some((student) => student.name === occurrence.studentName)),
-    [occurrences, visibleStudents]
-  );
+  const visibleOccurrences = occurrences;
 
   const selectedStudentData =
     visibleStudents.find((student) => student.id === selectedStudent) ?? null;
-
-  const selectedStudentCareLogs = selectedStudentData
-    ? visibleCareLogs.filter((log) => log.studentName === selectedStudentData.name)
-    : [];
 
   const titles: Record<Screen, string> = {
     overview: "Visão Geral",
     students: selectedStudent ? "Prontuário Eletrônico" : "Meus Alunos",
     record: "Prontuário",
-    log: "Meus Atendimentos",
-    meetings: "Minhas Reuniões",
-    occurrences: "Minhas Ocorrências",
+    meetings: "Reuniões",
+    occurrences: "Ocorrências",
     profile: "Meu Perfil",
   };
 
@@ -2062,7 +1793,6 @@ export default function AcompanhantesApp({
             <OverviewScreen
               students={visibleStudents}
               meetings={visibleMeetings}
-              careLogs={visibleCareLogs}
               occurrences={visibleOccurrences}
               onNav={handleNav}
             />
@@ -2080,17 +1810,7 @@ export default function AcompanhantesApp({
           {!isLoadingData && !loadError && activeNav === "students" && selectedStudentData && (
             <StudentRecord
               student={selectedStudentData}
-              careLogs={selectedStudentCareLogs}
               onBack={() => setSelectedStudent(null)}
-            />
-          )}
-
-          {!isLoadingData && !loadError && activeNav === "log" && (
-            <CareLogScreen
-              careLogs={visibleCareLogs}
-              students={visibleStudents}
-              currentUser={currentUser}
-              setCareLogs={setCareLogs}
             />
           )}
 

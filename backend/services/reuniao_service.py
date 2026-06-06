@@ -29,6 +29,13 @@ def _parse_horario(value: str | None, default: time) -> time:
 def _reuniao_data(reuniao: Reuniao, db: Session) -> dict:
     turma = db.query(Turma).filter(Turma.id == reuniao.turma_id).first()
     status = reuniao.status.value if hasattr(reuniao.status, "value") else reuniao.status
+    usuario_nome = None
+    usuario_cargo = None
+    if reuniao.usuario_id:
+        usuario = db.query(Usuario).filter(Usuario.id == reuniao.usuario_id).first()
+        if usuario:
+            usuario_nome = usuario.nome
+            usuario_cargo = usuario.cargo.value if hasattr(usuario.cargo, "value") else usuario.cargo
     return {
         "id": reuniao.id,
         "turma_id": reuniao.turma_id,
@@ -40,6 +47,8 @@ def _reuniao_data(reuniao: Reuniao, db: Session) -> dict:
         "horario_fim": reuniao.horario_fim.strftime("%H:%M"),
         "status": status,
         "usuario_id": reuniao.usuario_id,
+        "usuario_nome": usuario_nome,
+        "usuario_cargo": usuario_cargo,
     }
 
 

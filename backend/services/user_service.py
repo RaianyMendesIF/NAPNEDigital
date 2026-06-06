@@ -39,18 +39,6 @@ def create_user_service(user_data: UserCreate, db: Session):
         if coordenadores >= 1:
             return error_message("Já existe um coordenador ativo no sistema", 400)
 
-    if cargo_normalizado == Cargo.ACOMPANHANTE.value:
-        acompanhantes = (
-            db.query(Usuario)
-            .filter(
-                Usuario.cargo == Cargo.ACOMPANHANTE,
-                Usuario.status == StatusUsuario.ATIVO,
-            )
-            .count()
-        )
-        if acompanhantes >= 3:
-            return error_message("Limite de 3 acompanhantes ativos atingido", 400)
-
     existing = db.query(Usuario).filter((Usuario.siape == user_data.siape) | (Usuario.email == user_data.email)).first()
     if existing:
         return error_message("Siape ou e-mail já cadastrado", 400)
