@@ -79,7 +79,15 @@ def ids_alunos_visiveis_usuario(usuario: Usuario, db: Session) -> list[int] | No
 
 
 def usuario_tem_acesso_turma(usuario: Usuario, turma_id: int, db: Session) -> bool:
-    return usuario.cargo in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE)
+    if usuario.cargo == Cargo.COORDENADOR:
+        return True
+    if usuario.cargo == Cargo.ACOMPANHANTE:
+        turma = db.query(Turma).filter(Turma.id == turma_id).first()
+        if not turma:
+            return False
+        aluno = db.query(Aluno).filter(Aluno.id == turma.aluno_id).first()
+        return aluno is not None and aluno.acompanhante_id == usuario.id
+    return False
 
 
 def require_professor_in_turma(

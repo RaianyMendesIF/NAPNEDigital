@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from core import require_admin, get_current_user
+from core import require_admin, require_gestor, get_current_user
 from database import get_db
 from schemas import ReuniaoCreate, ReuniaoUpdate
 from services import (
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/reunioes", tags=["reunioes"])
 def create_reuniao(
     data: ReuniaoCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(require_admin),
+    current_user=Depends(require_gestor),
 ):
     return create_reuniao_service(data, current_user, db)
 

@@ -1,5 +1,10 @@
 from .auth_service import login_service
-from .user_service import create_user_service, deactivate_user_service, list_users_service
+from .user_service import (
+    create_user_service,
+    deactivate_user_service,
+    list_users_service,
+    update_me_service,
+)
 from .responsavel_service import (
     create_responsavel_service,
     list_responsaveis_service,
@@ -57,6 +62,7 @@ __all__ = [
     "create_user_service",
     "deactivate_user_service",
     "list_users_service",
+    "update_me_service",
     "create_responsavel_service",
     "list_responsaveis_service",
     "get_responsavel_service",

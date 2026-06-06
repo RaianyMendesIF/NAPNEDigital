@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
-from schemas import UserCreate
+from schemas import UserCreate, UserMeUpdate
 from models import Usuario, StatusUsuario, Cargo
 from utils import error_message, success_message
-from core import hash_password
+from core import hash_password, verify_password
 
 
 def _user_data(user: Usuario) -> dict:
@@ -71,6 +71,45 @@ def list_users_service(db: Session, cargo: str | None = None, apenas_ativos: boo
     return success_message(
         data=[_user_data(u) for u in usuarios],
         message="Usuários listados com sucesso",
+    )
+
+
+def update_me_service(usuario: Usuario, data: UserMeUpdate, db: Session):
+    if usuario.status != StatusUsuario.ATIVO:
+        return error_message("Conta inativa não pode ser atualizada", 403)
+
+    updates = data.model_dump(exclude_unset=True)
+    nova_senha = updates.pop("nova_senha", None)
+    senha_atual = updates.pop("senha_atual", None)
+
+    if nova_senha is not None:
+        if not senha_atual:
+            return error_message("Informe a senha atual para definir uma nova senha", 400)
+        if not verify_password(senha_atual, usuario.senha):
+            return error_message("Senha atual incorreta", 400)
+        usuario.senha = hash_password(nova_senha)
+
+    if "email" in updates and updates["email"] != usuario.email:
+        email_em_uso = (
+            db.query(Usuario)
+            .filter(Usuario.email == updates["email"], Usuario.id != usuario.id)
+            .first()
+        )
+        if email_em_uso:
+            return error_message("E-mail já cadastrado para outro usuário", 400)
+        usuario.email = updates["email"]
+
+    if "nome" in updates:
+        usuario.nome = updates["nome"]
+
+    if not updates and nova_senha is None:
+        return error_message("Nenhuma alteração informada", 400)
+
+    db.commit()
+    db.refresh(usuario)
+    return success_message(
+        data=_user_data(usuario),
+        message="Perfil atualizado com sucesso",
     )
 
 

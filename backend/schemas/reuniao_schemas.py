@@ -10,6 +10,7 @@ class ReuniaoCreate(BaseModel):
     data_reuniao: date
     horario_inicio: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
     horario_fim: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    responsavel_id: int | None = None
 
 
 class ReuniaoUpdate(BaseModel):
@@ -19,6 +20,7 @@ class ReuniaoUpdate(BaseModel):
     horario_inicio: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
     horario_fim: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
     status: str | None = None
+    responsavel_id: int | None = None
 
 
 class ReuniaoResponse(BaseModel):
