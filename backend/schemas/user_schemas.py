@@ -1,9 +1,11 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, EmailStr
 
 class UserCreate(BaseModel):
     siape: str = Field(min_length=7, max_length=7)
     nome: str = Field(min_length=3)
-    cargo: str
+    cargo: Literal["Coordenador", "Acompanhante", "Agente"]
     email: EmailStr
     senha: str = Field(min_length=8)
 

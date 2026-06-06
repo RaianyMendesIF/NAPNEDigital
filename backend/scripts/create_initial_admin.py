@@ -15,8 +15,8 @@ def create_initial_admin_script():
     
     coordenador = Usuario(
         siape="1234567",
-        nome="Coordenador SINAPNE",
-        email="coordenador@example.com",
+        nome="Eva Maria Testa Teles",
+        email="eva.teles@ifms.edu.br",
         senha=hash_pass,
         cargo="Coordenador",
         status="Ativo"

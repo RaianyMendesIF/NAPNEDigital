@@ -20,6 +20,7 @@ def get_user_info(current_user: dict = Depends(get_current_user)):
         else current_user.cargo
     )
     return {
+        "id": current_user.id,
         "siape": current_user.siape,
         "nome": current_user.nome,
         "cargo": cargo,

@@ -117,37 +117,8 @@ def _filtrar_por_cargo(prontuario: dict, cargo: Cargo) -> dict:
     if cargo == Cargo.COORDENADOR:
         return prontuario
 
-    if cargo == Cargo.PSICOLOGO:
-        return {
-            **prontuario,
-            "documentacoes": [],
-        }
-
-    if cargo == Cargo.PROFESSOR:
-        return {
-            "aluno": prontuario["aluno"],
-            "responsavel": None,
-            "turmas": prontuario["turmas"],
-            "professores": [],
-            "documentacoes": [],
-            "atendimentos": [],
-            "ocorrencias": prontuario["ocorrencias"],
-            "reunioes": prontuario["reunioes"],
-            "solicitacoes": prontuario["solicitacoes"],
-        }
-
-    if cargo == Cargo.AGENTE:
-        return {
-            "aluno": prontuario["aluno"],
-            "responsavel": prontuario["responsavel"],
-            "turmas": prontuario["turmas"],
-            "professores": [],
-            "documentacoes": prontuario["documentacoes"],
-            "atendimentos": [],
-            "ocorrencias": [],
-            "reunioes": [],
-            "solicitacoes": [],
-        }
+    if cargo == Cargo.ACOMPANHANTE:
+        return prontuario
 
     return {
         "aluno": None,

@@ -103,21 +103,8 @@ def update_reuniao_service(reuniao_id: int, data: ReuniaoUpdate, db: Session):
 
 
 def _turmas_visiveis(usuario: Usuario, db: Session) -> list[int] | None:
-    if usuario.cargo in (Cargo.COORDENADOR, Cargo.AGENTE, Cargo.PSICOLOGO):
+    if usuario.cargo in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
         return None
-
-    if usuario.cargo == Cargo.PROFESSOR:
-        rows = (
-            db.query(ProfessorTurma.turma_id)
-            .filter(
-                ProfessorTurma.usuario_id == usuario.id,
-                ProfessorTurma.status == StatusProfessorTurma.ATIVO,
-            )
-            .distinct()
-            .all()
-        )
-        return [row[0] for row in rows]
-
     return []
 
 

@@ -79,21 +79,8 @@ def create_ocorrencia_service(
 
 
 def _turmas_acessiveis(usuario: Usuario, db: Session) -> list[int] | None:
-    if usuario.cargo in (Cargo.COORDENADOR, Cargo.AGENTE):
+    if usuario.cargo in (Cargo.COORDENADOR, Cargo.ACOMPANHANTE):
         return None
-
-    if usuario.cargo == Cargo.PROFESSOR:
-        rows = (
-            db.query(ProfessorTurma.turma_id)
-            .filter(
-                ProfessorTurma.usuario_id == usuario.id,
-                ProfessorTurma.status == StatusProfessorTurma.ATIVO,
-            )
-            .distinct()
-            .all()
-        )
-        return [row[0] for row in rows]
-
     return []
 
 

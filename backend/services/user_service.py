@@ -21,6 +21,35 @@ def _user_data(user: Usuario) -> dict:
 
 
 def create_user_service(user_data: UserCreate, db: Session):
+    cargo_normalizado = user_data.cargo
+    if cargo_normalizado == "Agente":
+        cargo_normalizado = Cargo.ACOMPANHANTE.value
+    if cargo_normalizado not in (Cargo.COORDENADOR.value, Cargo.ACOMPANHANTE.value):
+        return error_message("Cargo inválido. Use Coordenador ou Acompanhante.", 400)
+
+    if cargo_normalizado == Cargo.COORDENADOR.value:
+        coordenadores = (
+            db.query(Usuario)
+            .filter(
+                Usuario.cargo == Cargo.COORDENADOR,
+                Usuario.status == StatusUsuario.ATIVO,
+            )
+            .count()
+        )
+        if coordenadores >= 1:
+            return error_message("Já existe um coordenador ativo no sistema", 400)
+
+    if cargo_normalizado == Cargo.ACOMPANHANTE.value:
+        acompanhantes = (
+            db.query(Usuario)
+            .filter(
+                Usuario.cargo == Cargo.ACOMPANHANTE,
+                Usuario.status == StatusUsuario.ATIVO,
+            )
+            .count()
+        )
+        if acompanhantes >= 3:
+            return error_message("Limite de 3 acompanhantes ativos atingido", 400)
 
     existing = db.query(Usuario).filter((Usuario.siape == user_data.siape) | (Usuario.email == user_data.email)).first()
     if existing:
@@ -29,7 +58,7 @@ def create_user_service(user_data: UserCreate, db: Session):
     user = Usuario(
         siape=user_data.siape,
         nome=user_data.nome,
-        cargo=user_data.cargo,
+        cargo=cargo_normalizado,
         email=user_data.email,
         senha=hash_password(user_data.senha)
     )
