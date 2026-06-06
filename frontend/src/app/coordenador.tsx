@@ -94,8 +94,11 @@ interface StaffMember {
   role: "Acompanhante" | "Coordenador";
   email: string;
   siape: string;
+  status: "Ativo" | "Inativo";
   students?: Student[];
 }
+
+type StatusFilter = "Ativos" | "Inativos" | "Todos";
 
 interface MeetingEvent {
   id: number;
@@ -189,7 +192,7 @@ const formatMeetingDate = (dateStr: string) =>
   parseMeetingDateOnly({ date: dateStr }).toLocaleDateString("pt-BR");
 
 const acompanhantesFromStaff = (staffList: StaffMember[]) =>
-  staffList.filter((member) => member.role === "Acompanhante");
+  staffList.filter((member) => member.role === "Acompanhante" && member.status === "Ativo");
 
 const defaultCompanionIdForStudent = (
   student: Student | undefined,
@@ -328,6 +331,8 @@ const mergeRecentActivities = (
 };
 
 const toStaffMember = (usuario: BackendUsuario): StaffMember | null => {
+  const status: StaffMember["status"] = usuario.status === "Inativo" ? "Inativo" : "Ativo";
+
   if (usuario.cargo === "Coordenador") {
     return {
       id: String(usuario.id),
@@ -335,6 +340,7 @@ const toStaffMember = (usuario: BackendUsuario): StaffMember | null => {
       role: "Coordenador",
       email: usuario.email,
       siape: usuario.siape,
+      status,
       students: [],
     };
   }
@@ -346,11 +352,18 @@ const toStaffMember = (usuario: BackendUsuario): StaffMember | null => {
       role: "Acompanhante",
       email: usuario.email,
       siape: usuario.siape,
+      status,
       students: [],
     };
   }
 
   return null;
+};
+
+const matchesStatusFilter = (status: string, filter: StatusFilter) => {
+  if (filter === "Todos") return true;
+  if (filter === "Ativos") return status !== "Inativo";
+  return status === "Inativo";
 };
 
 
@@ -435,7 +448,6 @@ function Sidebar({
   onNav,
   onLogout,
   currentUser,
-  studentCount,
   navItems,
   roleLabel,
 }: {
@@ -443,7 +455,6 @@ function Sidebar({
   onNav: (s: Screen) => void;
   onLogout: () => void;
   currentUser: User;
-  studentCount: number;
   navItems: typeof NAV_ITEMS_COORDENADOR;
   roleLabel: string;
 }) {
@@ -485,7 +496,6 @@ function Sidebar({
                 >
                   <Icon size={16} className={active ? "" : "opacity-60 group-hover:opacity-100"} style={active ? { color: "var(--accent)" } : {}} />
                   {label}
-                  {id === "students" && <span className="ml-auto text-[10px] font-mono text-white px-1.5 py-0.5 rounded" style={{ background: "var(--accent)" }}>{studentCount}</span>}
                 </button>
               </li>
             );
@@ -927,6 +937,7 @@ function StudentsScreen({
   onActivity,
   onReload,
   canDeleteStudent = false,
+  canEditStudent = false,
 }: {
   students: Student[];
   staffList: StaffMember[];
@@ -934,9 +945,11 @@ function StudentsScreen({
   onActivity: (activity: RecentActivityInput) => void;
   onReload: () => Promise<void>;
   canDeleteStudent?: boolean;
+  canEditStudent?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [filterCourse, setFilterCourse] = useState("Todos");
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>("Ativos");
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState(1);
 
@@ -954,10 +967,13 @@ function StudentsScreen({
   const [newHistorico, setNewHistorico] = useState("");
   const [newObservacao, setNewObservacao] = useState("");
   const [newCompanionId, setNewCompanionId] = useState("");
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+  const [existingResponsavelId, setExistingResponsavelId] = useState<number | null>(null);
   const [removingStudentId, setRemovingStudentId] = useState<string | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
   const [modalError, setModalError] = useState("");
   const [isSavingStudent, setIsSavingStudent] = useState(false);
+  const [isLoadingEdit, setIsLoadingEdit] = useState(false);
 
   const normalizeCpf = (cpf: string) => cpf.replace(/\D/g, "");
 
@@ -989,8 +1005,71 @@ function StudentsScreen({
     setNewHistorico("");
     setNewObservacao("");
     setNewCompanionId("");
+    setEditingStudentId(null);
+    setExistingResponsavelId(null);
     setModalError("");
     setModalStep(1);
+  };
+
+  const openCreateModal = () => {
+    resetStudentForm();
+    setShowModal(true);
+  };
+
+  const openEditModal = async (student: Student) => {
+    setModalError("");
+    setRequestMessage("");
+    setShowModal(true);
+    setModalStep(1);
+    setEditingStudentId(student.id);
+    setIsLoadingEdit(true);
+
+    try {
+      const [aluno, prontuario] = await Promise.all([
+        apiClient.getAluno(Number(student.id)),
+        apiClient.getProntuario(Number(student.id)),
+      ]);
+
+      setNewStudentName(aluno.nome);
+      setNewRegistration(aluno.matricula);
+      setNewCpf(aluno.cpf);
+      setNewBirthDate(aluno.data_nascimento);
+      setNewPhone(aluno.telefone ?? "");
+      setNewCourse(aluno.curso);
+      setNewYear(aluno.ano);
+      setNewNeed(aluno.necessidade_especial);
+      setNewCid(aluno.cid === "Não informado" ? "" : aluno.cid);
+      setNewCompanionId(aluno.acompanhante_id ? String(aluno.acompanhante_id) : "");
+
+      const responsavel = prontuario.responsavel;
+      if (responsavel) {
+        setExistingResponsavelId(responsavel.id);
+        setNewResponsavel(responsavel.nome);
+        setNewResponsavelEmail(responsavel.email ?? "");
+      } else {
+        setExistingResponsavelId(null);
+        setNewResponsavel(parseResponsavelFromObservacao(aluno.observacao) ?? "");
+        setNewResponsavelEmail("");
+      }
+
+      const observacaoSemResponsavel = (aluno.observacao ?? "")
+        .replace(/Responsável:\s*[^\n]+(\n\n?)?/i, "")
+        .trim();
+      const observacaoParts = observacaoSemResponsavel.split("\n\n");
+      if (observacaoParts.length >= 2) {
+        setNewHistorico(observacaoParts[0]);
+        setNewObservacao(observacaoParts.slice(1).join("\n\n"));
+      } else {
+        setNewHistorico("");
+        setNewObservacao(observacaoSemResponsavel);
+      }
+    } catch (error) {
+      setModalError(error instanceof Error ? error.message : "Erro ao carregar dados do aluno");
+      setShowModal(false);
+      resetStudentForm();
+    } finally {
+      setIsLoadingEdit(false);
+    }
   };
 
   const getStepValidationMessage = (step: number) => {
@@ -1020,8 +1099,9 @@ function StudentsScreen({
 
   const needs = ["Todas", "TEA", "TDAH", "Deficiência Visual", "Deficiência Auditiva", "Altas Habilidades", "Dislexia"];
   const courseFilters = ["Todos", "Técnico em Informática", "Técnico em Eletrotécnica"];
-  const companions = staffList.filter((member) => member.role === "Acompanhante");
-  const filtered = students.filter(s =>
+  const companions = acompanhantesFromStaff(staffList);
+  const filtered = students.filter((s) =>
+    matchesStatusFilter(s.status, filterStatus) &&
     (filterCourse === "Todos" || s.course === filterCourse) &&
     (s.name.toLowerCase().includes(search.toLowerCase()) || s.registration.includes(search))
   );
@@ -1041,63 +1121,102 @@ function StudentsScreen({
 
     setIsSavingStudent(true);
     try {
-    const selectedCompanion = companions.find((member) => member.id === newCompanionId);
-    const observacaoParts = [newHistorico.trim(), newObservacao.trim()].filter(Boolean);
-    const responsavelNome = newResponsavel.trim();
-    const telefoneContato = newPhone.trim();
-    const telefoneDigits = telefoneContato.replace(/\D/g, "");
-    let responsavelId: number | undefined;
+      const selectedCompanion = companions.find((member) => member.id === newCompanionId);
+      const observacaoParts = [newHistorico.trim(), newObservacao.trim()].filter(Boolean);
+      const responsavelNome = newResponsavel.trim();
+      const telefoneContato = newPhone.trim();
+      const telefoneDigits = telefoneContato.replace(/\D/g, "");
+      let responsavelId: number | undefined = existingResponsavelId ?? undefined;
 
-    if (responsavelNome && telefoneDigits.length >= 8) {
-      const responsavel = await apiClient.createResponsavel({
-        nome: responsavelNome,
-        telefone: telefoneContato,
-        email: newResponsavelEmail.trim() || undefined,
-      });
-      responsavelId = responsavel.id;
-    } else if (responsavelNome) {
-      observacaoParts.unshift(`Responsável: ${responsavelNome}`);
-    }
+      if (responsavelNome && telefoneDigits.length >= 8) {
+        if (existingResponsavelId) {
+          await apiClient.updateResponsavel(existingResponsavelId, {
+            nome: responsavelNome,
+            telefone: telefoneContato,
+            email: newResponsavelEmail.trim() || undefined,
+          });
+        } else {
+          const responsavel = await apiClient.createResponsavel({
+            nome: responsavelNome,
+            telefone: telefoneContato,
+            email: newResponsavelEmail.trim() || undefined,
+          });
+          responsavelId = responsavel.id;
+        }
+      } else if (responsavelNome) {
+        observacaoParts.unshift(`Responsável: ${responsavelNome}`);
+      }
 
-    const savedStudent = await apiClient.createAluno({
-      matricula: newRegistration.trim(),
-      nome: newStudentName.trim(),
-      data_nascimento: newBirthDate,
-      cpf: normalizeCpf(newCpf),
-      telefone: telefoneContato || undefined,
-      curso: newCourse,
-      ano: newYear,
-      necessidade_especial: newNeed,
-      cid: newCid.trim() || "Não informado",
-      observacao: observacaoParts.join("\n\n") || undefined,
-      responsavel_id: responsavelId,
-      acompanhante_id: selectedCompanion ? Number(selectedCompanion.id) : undefined,
-    });
+      if (editingStudentId) {
+        const updatedStudent = await apiClient.updateAluno(Number(editingStudentId), {
+          matricula: newRegistration.trim(),
+          nome: newStudentName.trim(),
+          data_nascimento: newBirthDate,
+          cpf: normalizeCpf(newCpf),
+          telefone: telefoneContato || undefined,
+          curso: newCourse,
+          ano: newYear,
+          necessidade_especial: newNeed,
+          cid: newCid.trim() || "Não informado",
+          observacao: observacaoParts.join("\n\n") || undefined,
+          responsavel_id: responsavelId ?? null,
+          acompanhante_id: selectedCompanion ? Number(selectedCompanion.id) : null,
+        });
 
-    const now = new Date();
-    const semestre = now.getMonth() < 6 ? "1" : "2" as const;
-    try {
-      await apiClient.createTurma({
-        aluno_id: savedStudent.id,
-        ano_letivo: now.getFullYear(),
-        semestre,
-      });
-    } catch {
-      // turma pode já existir para o ciclo
-    }
+        await onReload();
+        onActivity({
+          kind: "student",
+          title: "Aluno atualizado",
+          description: `${updatedStudent.nome} - ${updatedStudent.curso} ${updatedStudent.ano}`,
+          actor: "Coordenação",
+        });
+      } else {
+        const savedStudent = await apiClient.createAluno({
+          matricula: newRegistration.trim(),
+          nome: newStudentName.trim(),
+          data_nascimento: newBirthDate,
+          cpf: normalizeCpf(newCpf),
+          telefone: telefoneContato || undefined,
+          curso: newCourse,
+          ano: newYear,
+          necessidade_especial: newNeed,
+          cid: newCid.trim() || "Não informado",
+          observacao: observacaoParts.join("\n\n") || undefined,
+          responsavel_id: responsavelId,
+          acompanhante_id: selectedCompanion ? Number(selectedCompanion.id) : undefined,
+        });
 
-    await onReload();
-    onActivity({
-      kind: "student",
-      title: "Aluno adicionado",
-      description: `${savedStudent.nome} - ${savedStudent.curso} ${savedStudent.ano}`,
-      actor: "Coordenação",
-    });
+        const now = new Date();
+        const semestre = now.getMonth() < 6 ? "1" : "2" as const;
+        try {
+          await apiClient.createTurma({
+            aluno_id: savedStudent.id,
+            ano_letivo: now.getFullYear(),
+            semestre,
+          });
+        } catch {
+          // turma pode já existir para o ciclo
+        }
 
-    resetStudentForm();
-    setShowModal(false);
+        await onReload();
+        onActivity({
+          kind: "student",
+          title: "Aluno adicionado",
+          description: `${savedStudent.nome} - ${savedStudent.curso} ${savedStudent.ano}`,
+          actor: "Coordenação",
+        });
+      }
+
+      resetStudentForm();
+      setShowModal(false);
     } catch (error) {
-      setModalError(error instanceof Error ? error.message : "Erro ao cadastrar aluno");
+      setModalError(
+        error instanceof Error
+          ? error.message
+          : editingStudentId
+            ? "Erro ao atualizar aluno"
+            : "Erro ao cadastrar aluno"
+      );
     } finally {
       setIsSavingStudent(false);
     }
@@ -1135,11 +1254,19 @@ function StudentsScreen({
         <div className="flex items-center gap-2">
           <div className="relative">
             <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as StatusFilter)} className="pl-9 pr-8 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring appearance-none cursor-pointer">
+              <option value="Ativos">Ativos</option>
+              <option value="Inativos">Inativos</option>
+              <option value="Todos">Todos</option>
+            </select>
+          </div>
+          <div className="relative">
+            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <select value={filterCourse} onChange={e => setFilterCourse(e.target.value)} className="pl-9 pr-8 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring appearance-none cursor-pointer">
               {courseFilters.map(course => <option key={course}>{course}</option>)}
             </select>
           </div>
-          <button onClick={() => { resetStudentForm(); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white whitespace-nowrap transition-all hover:opacity-90" style={{ background: "var(--accent)" }}>
+          <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white whitespace-nowrap transition-all hover:opacity-90" style={{ background: "var(--accent)" }}>
             <Plus size={15} /> Adicionar Aluno
           </button>
         </div>
@@ -1189,6 +1316,14 @@ function StudentsScreen({
                       <button onClick={() => onSelectStudent(s.id)} className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md hover:bg-secondary" style={{ color: "var(--accent)" }}>
                         <Eye size={13} /> Prontuário
                       </button>
+                      {canEditStudent && (
+                        <button
+                          onClick={() => openEditModal(s)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md hover:bg-secondary text-foreground"
+                        >
+                          <Edit2 size={13} /> Editar
+                        </button>
+                      )}
                       {canDeleteStudent && (
                         <button
                           onClick={() => handleRemoveStudent(s)}
@@ -1214,8 +1349,14 @@ function StudentsScreen({
           <div className="bg-card rounded-xl border border-border w-full max-w-xl shadow-2xl">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <div>
-                <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>Adicionar Novo Aluno</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Etapa {modalStep} de 3: {modalStep === 1 ? "Dados Pessoais" : modalStep === 2 ? "Informações Acadêmicas" : "Anamnese Inicial"}</p>
+                <p className="font-bold text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+                  {editingStudentId ? "Editar Aluno" : "Adicionar Novo Aluno"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isLoadingEdit
+                    ? "Carregando dados..."
+                    : `Etapa ${modalStep} de 3: ${modalStep === 1 ? "Dados Pessoais" : modalStep === 2 ? "Informações Acadêmicas" : "Anamnese Inicial"}`}
+                </p>
               </div>
               <button onClick={() => { setShowModal(false); resetStudentForm(); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"><X size={16} className="text-muted-foreground" /></button>
             </div>
@@ -1225,7 +1366,9 @@ function StudentsScreen({
               ))}
             </div>
             <div className="px-6 py-5 space-y-4">
-              {modalStep === 1 && (
+              {isLoadingEdit ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">Carregando dados do aluno...</div>
+              ) : modalStep === 1 && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">Nome Completo *</label><input
                           value={newStudentName}
@@ -1233,18 +1376,27 @@ function StudentsScreen({
                           placeholder="Ex: João Carlos da Silva"
                           className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Matrícula *</label><input
-  value={newRegistration}
-  onChange={e => setNewRegistration(e.target.value)}
-  placeholder="2025001"
-  className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
- /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">CPF *</label><input value={newCpf} onChange={e => setNewCpf(e.target.value)} placeholder="000.000.000-00" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
-                  <div><label className="text-xs font-medium text-foreground block mb-1">Data de Nascimento *</label><input type="date" value={newBirthDate} onChange={e => setNewBirthDate(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
+                  <div>
+                    <label className="text-xs font-medium text-foreground block mb-1">Matrícula *</label>
+                    <input
+                      value={newRegistration}
+                      onChange={e => setNewRegistration(e.target.value)}
+                      placeholder="2025001"
+                      className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-foreground block mb-1">CPF *</label>
+                    <input value={newCpf} onChange={e => setNewCpf(e.target.value)} placeholder="000.000.000-00" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-foreground block mb-1">Data de Nascimento *</label>
+                    <input type="date" value={newBirthDate} onChange={e => setNewBirthDate(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
                   <div><label className="text-xs font-medium text-foreground block mb-1">Contato / WhatsApp</label><input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="(67) 9 9999-9999" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
-              {modalStep === 2 && (
+              {!isLoadingEdit && modalStep === 2 && (
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-xs font-medium text-foreground block mb-1">Curso *</label><select value={newCourse} onChange={e => setNewCourse(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>Técnico em Informática</option><option>Técnico em Eletrotécnica</option></select></div>
                   <div><label className="text-xs font-medium text-foreground block mb-1">Semestre *</label><select value={newYear} onChange={e => setNewYear(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">{COURSE_SEMESTERS.map((semester) => <option key={semester}>{semester}</option>)}</select></div>
@@ -1261,7 +1413,7 @@ function StudentsScreen({
                   <div className="col-span-2"><label className="text-xs font-medium text-foreground block mb-1">CID-10</label><input value={newCid} onChange={e => setNewCid(e.target.value)} placeholder="Ex: F84.0" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" /></div>
                 </div>
               )}
-              {modalStep === 3 && (
+              {!isLoadingEdit && modalStep === 3 && (
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground">Informações da entrevista familiar inicial (Anamnese).</p>
                   <div><label className="text-xs font-medium text-foreground block mb-1">Nome do Responsável Principal</label><input value={newResponsavel} onChange={e => setNewResponsavel(e.target.value)} placeholder="Nome completo" className="w-full px-3 py-2.5 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
@@ -1281,6 +1433,7 @@ function StudentsScreen({
               <button
                 onClick={() => modalStep < 3 ? handleNextStep() : handleSaveStudent()}
                 disabled={
+                  isLoadingEdit ||
                   isSavingStudent ||
                   (modalStep === 1 && !isStep1Valid) ||
                   (modalStep === 2 && !isStep2Valid) ||
@@ -1289,7 +1442,13 @@ function StudentsScreen({
                 className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: modalStep === 3 ? "var(--accent)" : "var(--primary)" }}
               >
-                {isSavingStudent ? "Salvando..." : modalStep === 3 ? "Salvar Cadastro" : "Próxima Etapa"}
+                {isSavingStudent
+                  ? "Salvando..."
+                  : modalStep === 3
+                    ? editingStudentId
+                      ? "Salvar Alterações"
+                      : "Salvar Cadastro"
+                    : "Próxima Etapa"}
               </button>
             </div>
           </div>
@@ -1313,6 +1472,8 @@ function CorpoDocenteView({
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<"Todos" | "Acompanhante" | "Coordenador">("Todos");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("Ativos");
+  const [removingStaffId, setRemovingStaffId] = useState<string | null>(null);
   
   // Estado para controlar a navegação interna do perfil
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
@@ -1383,9 +1544,37 @@ function CorpoDocenteView({
     }
   };
 
-  const filteredStaff = selectedFilter === 'Todos'
-    ? staffList 
-    : staffList.filter(member => member.role === selectedFilter);
+  const handleRemoveStaff = async (member: StaffMember) => {
+    if (member.role !== "Acompanhante" || member.status === "Inativo") return;
+
+    const confirmed = window.confirm(
+      `Desativar ${member.name}? O acompanhante perderá o acesso ao sistema.`
+    );
+    if (!confirmed) return;
+
+    setRequestMessage("");
+    setRemovingStaffId(member.id);
+    try {
+      await apiClient.deleteUsuario(Number(member.id));
+      await onReload();
+      onActivity({
+        kind: "staff",
+        title: "Acompanhante desativado",
+        description: member.name,
+        actor: "Coordenação",
+      });
+    } catch (error) {
+      setRequestMessage(error instanceof Error ? error.message : "Erro ao desativar acompanhante");
+    } finally {
+      setRemovingStaffId(null);
+    }
+  };
+
+  const filteredStaff = staffList.filter((member) => {
+    const matchesRole = selectedFilter === "Todos" || member.role === selectedFilter;
+    const matchesStatus = matchesStatusFilter(member.status, statusFilter);
+    return matchesRole && matchesStatus;
+  });
 
   // Encontra os dados do membro selecionado para a tela de Perfil
   const currentStaff = staffList.find(m => m.id === selectedStaffId);
@@ -1497,21 +1686,44 @@ function CorpoDocenteView({
         </button>
       </div>
 
-      {/* Filtro por Tipo de Usuário */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {(["Todos", "Acompanhante", "Coordenador"] as const).map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setSelectedFilter(filter)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
-              selectedFilter === filter 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {filter === "Acompanhante" ? "Acompanhantes" : filter}
-          </button>
-        ))}
+      {requestMessage && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{requestMessage}</p>
+      )}
+
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-4">
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          <span className="text-xs font-semibold text-gray-500 self-center">Cargo:</span>
+          {(["Todos", "Acompanhante", "Coordenador"] as const).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setSelectedFilter(filter)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
+                selectedFilter === filter
+                  ? "bg-blue-100 text-blue-700"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {filter === "Acompanhante" ? "Acompanhantes" : filter}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          <span className="text-xs font-semibold text-gray-500 self-center">Status:</span>
+          {(["Ativos", "Inativos", "Todos"] as const).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setStatusFilter(filter)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
+                statusFilter === filter
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Lista em Formato de Tabela Ocupando Tela Inteira */}
@@ -1522,6 +1734,7 @@ function CorpoDocenteView({
               <tr className="border-b border-gray-200 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">
                 <th className="py-3.5 px-6">Nome Completo</th>
                 <th className="py-3.5 px-6">Cargo / Função</th>
+                <th className="py-3.5 px-6">Status</th>
                 <th className="py-3.5 px-6">SIAPE</th>
                 <th className="py-3.5 px-6">E-mail Institucional</th>
                 <th className="py-3.5 px-6 text-center">Ações</th>
@@ -1540,20 +1753,40 @@ function CorpoDocenteView({
                   </td>
                   <td className="py-4 px-6">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      member.role === 'Coordenador' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'
+                      member.role === "Coordenador" ? "bg-purple-100 text-purple-700" : "bg-amber-100 text-amber-700"
                     }`}>
                       {member.role}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      member.status === "Ativo" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
+                    }`}>
+                      {member.status}
                     </span>
                   </td>
                   <td className="py-4 px-6 font-mono text-xs text-gray-600">{member.siape}</td>
                   <td className="py-4 px-6 text-gray-500">{member.email}</td>
                   <td className="py-4 px-6 text-center">
-                    <button
-                      onClick={() => setSelectedStaffId(member.id)}
-                      className="px-3 py-1.5 bg-gray-50 hover:bg-blue-600 hover:text-white border border-gray-200 text-gray-600 rounded-md text-xs font-semibold transition"
-                    >
-                      Ver Alunos
-                    </button>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => setSelectedStaffId(member.id)}
+                        className="px-3 py-1.5 bg-gray-50 hover:bg-blue-600 hover:text-white border border-gray-200 text-gray-600 rounded-md text-xs font-semibold transition"
+                      >
+                        Ver Alunos
+                      </button>
+                      {member.role === "Acompanhante" && member.status === "Ativo" && (
+                        <button
+                          onClick={() => handleRemoveStaff(member)}
+                          disabled={removingStaffId === member.id}
+                          title="Desativar acompanhante"
+                          className="p-1.5 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                          aria-label={`Desativar ${member.name}`}
+                        >
+                          {removingStaffId === member.id ? <Clock size={14} /> : <Trash2 size={14} />}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1682,9 +1915,11 @@ function AtendimentoModal({
 }) {
   const responsaveis = [
     { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-    ...staffList
-      .filter((member) => member.role === "Acompanhante")
-      .map((member) => ({ id: member.id, name: member.name, role: member.role })),
+    ...acompanhantesFromStaff(staffList).map((member) => ({
+      id: member.id,
+      name: member.name,
+      role: member.role,
+    })),
   ];
 
   const [studentId, setStudentId] = useState(students[0]?.id ?? "");
@@ -2553,9 +2788,11 @@ function LogScreen({
 }) {
   const responsaveis = [
     { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-    ...staffList
-      .filter((member) => member.role === "Acompanhante")
-      .map((member) => ({ id: member.id, name: member.name, role: member.role })),
+    ...acompanhantesFromStaff(staffList).map((member) => ({
+      id: member.id,
+      name: member.name,
+      role: member.role,
+    })),
   ];
   const [dragOver, setDragOver] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -3490,7 +3727,7 @@ export default function App({
     let backendUsers: BackendUsuario[] = [];
     const backendAtendimentos = await apiClient.getAtendimentos();
     if (mode === "coordenador") {
-      backendUsers = await apiClient.getUsuarios({ apenas_ativos: true });
+      backendUsers = await apiClient.getUsuarios({ apenas_ativos: false });
     }
 
     const turmaByAluno = new Map(backendTurmas.map((t) => [t.aluno_id, t]));
@@ -3578,7 +3815,7 @@ export default function App({
   return (
     <div className="flex h-screen overflow-hidden bg-background" style={{ fontFamily: "Inter, sans-serif" }}>
       <div className="w-60 flex-shrink-0">
-        <Sidebar current={activeNav} onNav={handleNav} onLogout={handleLogout} currentUser={currentUser} studentCount={availableStudents.length} navItems={navItems} roleLabel={roleLabel} />
+        <Sidebar current={activeNav} onNav={handleNav} onLogout={handleLogout} currentUser={currentUser} navItems={navItems} roleLabel={roleLabel} />
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -3617,6 +3854,7 @@ export default function App({
               onActivity={addRecentActivity}
               onReload={loadBackendData}
               canDeleteStudent={mode === "coordenador"}
+              canEditStudent={mode === "coordenador"}
             />}
           {activeNav === "students" && selectedStudent && !showLog && (
             <StudentRecord

@@ -118,7 +118,7 @@ export interface Aluno {
 }
 
 export type AlunoCreate = Omit<Aluno, "id" | "status" | "ativo">;
-export type AlunoUpdate = Partial<Omit<Aluno, "id" | "cpf" | "matricula" | "ativo">>;
+export type AlunoUpdate = Partial<Omit<Aluno, "id" | "ativo">>;
 
 export interface Turma {
   id: number;

@@ -194,27 +194,44 @@ python app.py
 
 ---
 
-## Colocar o backend no ar (Render — gratuito)
+## Colocar o backend no ar (Koyeb — gratuito)
 
-A forma mais simples é usar o [Render](https://render.com) conectado ao seu repositório no GitHub.
+O [Render](https://render.com) passou a exigir cartão/plano pago. A alternativa mais fácil e **gratuita** é o [Koyeb](https://www.koyeb.com) (1 serviço grátis, sem cartão).
 
 ### Passo a passo
 
-1. Faça **push** do projeto para o GitHub (incluindo o arquivo `render.yaml` na raiz).
-2. Acesse [render.com](https://render.com) e crie uma conta (pode entrar com GitHub).
-3. Clique em **New +** → **Blueprint**.
-4. Conecte o repositório **NAPNE** e confirme a criação do serviço `napne-api`.
-5. Aguarde o deploy (leva alguns minutos na primeira vez).
-6. Copie a URL gerada, algo como:
+1. Faça **push** do projeto para o GitHub.
+2. Acesse [koyeb.com](https://www.koyeb.com) e crie conta com GitHub.
+3. Clique em **Create Web Service** → **GitHub** → selecione o repositório **NAPNE**.
+4. Configure assim:
+
+| Campo | Valor |
+|-------|-------|
+| Name | `napne-api` |
+| Builder | **Dockerfile** |
+| Dockerfile path | `backend/Dockerfile` |
+| Instance | **Free** (512 MB RAM) |
+| Port | `8000` |
+
+5. Em **Environment variables**, adicione:
+
+| Variável | Valor |
+|----------|-------|
+| `DATABASE_URL` | `sqlite:///./napne.db` |
+| `SECRET_KEY` | qualquer string longa e aleatória |
+| `CORS_ORIGINS` | `https://napne-digital.vercel.app,http://localhost:5173` |
+
+6. Clique em **Deploy** e aguarde alguns minutos.
+7. Copie a URL gerada, algo como:
    ```
-   https://napne-api.onrender.com
+   https://napne-api-SEU-USUARIO.koyeb.app
    ```
-7. Teste no navegador: `https://napne-api.onrender.com/docs` deve abrir o Swagger.
-8. Na **Vercel**, adicione a variável de ambiente:
+8. Teste: `https://SUA-URL.koyeb.app/docs` deve abrir o Swagger.
+9. Na **Vercel**, configure:
    ```
-   VITE_API_URL = https://napne-api.onrender.com
+   VITE_API_URL = https://SUA-URL.koyeb.app
    ```
-9. Faça um **redeploy** do frontend na Vercel.
+10. Faça **redeploy** do frontend na Vercel.
 
 ### Login após o deploy
 
@@ -223,10 +240,15 @@ A forma mais simples é usar o [Render](https://render.com) conectado ao seu rep
 | SIAPE | `1234567` |
 | Senha | `mudar123` |
 
-O sistema cria a coordenadora Eva automaticamente na primeira execução.
-
 ### Observações
 
-- O plano gratuito do Render **hiberna** após ~15 min sem uso. O primeiro acesso depois disso pode demorar ~30 segundos.
-- O banco usa **SQLite** no servidor. Os dados persistem, mas para produção séria o ideal é migrar para PostgreSQL.
-- Se o domínio da Vercel for outro, atualize `CORS_ORIGINS` no painel do Render (Environment) com a URL correta do frontend.
+- O plano gratuito **dorme** sem acesso. O primeiro request depois disso pode demorar alguns segundos.
+- O banco usa **SQLite** no servidor (ok para demo; produção séria → PostgreSQL).
+- Se a URL da Vercel for outra, atualize `CORS_ORIGINS` no Koyeb.
+
+### Outras opções gratuitas
+
+| Plataforma | Observação |
+|------------|------------|
+| [JustRunMy.App](https://justrunmy.app) | Container grátis, sem cartão; use o mesmo `backend/Dockerfile` |
+| [Hugging Face Spaces](https://huggingface.co/spaces) | Grátis com Docker; bom para demo acadêmica |

@@ -63,7 +63,7 @@ def update_aluno(
     aluno_id: int,
     data: AlunoUpdate,
     db: Session = Depends(get_db),
-    _gestor=Depends(require_gestor),
+    _admin=Depends(require_admin),
 ):
     return update_aluno_service(aluno_id, data, db)
 
