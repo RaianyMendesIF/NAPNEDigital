@@ -74,6 +74,13 @@ export interface UsuarioMe {
   ativo: boolean;
 }
 
+export interface UsuarioMeUpdate {
+  nome?: string;
+  email?: string;
+  senha_atual?: string;
+  nova_senha?: string;
+}
+
 export interface UsuarioCreate {
   siape: string;
   nome: string;
@@ -162,9 +169,10 @@ export interface ReuniaoCreate {
   data_reuniao: string;
   horario_inicio?: string | null;
   horario_fim?: string | null;
+  responsavel_id?: number | null;
 }
 
-export type ReuniaoUpdate = Partial<Omit<ReuniaoCreate, "turma_id"> & { status: string }>;
+export type ReuniaoUpdate = Partial<Omit<ReuniaoCreate, "turma_id"> & { status: string; responsavel_id: number | null }>;
 
 export interface Ocorrencia {
   id: number;
@@ -350,6 +358,10 @@ class ApiClient {
 
   async getMe(): Promise<UsuarioMe> {
     return this.request<UsuarioMe>("/users/me");
+  }
+
+  async updateMe(data: UsuarioMeUpdate): Promise<UsuarioMe> {
+    return this.request<UsuarioMe>("/users/me", "PATCH", data);
   }
 
   async getUsuarios(params?: { cargo?: string; apenas_ativos?: boolean }): Promise<Usuario[]> {
