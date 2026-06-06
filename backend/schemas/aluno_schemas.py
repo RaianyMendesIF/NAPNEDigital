@@ -17,7 +17,10 @@ class AlunoCreate(BaseModel):
     acompanhante_id: Optional[int] = None
 
 class AlunoUpdate(BaseModel):
+    matricula: Optional[str] = None
     nome: Optional[str] = None
+    data_nascimento: Optional[date] = None
+    cpf: Optional[str] = None
     telefone: Optional[str] = None
     curso: Optional[str] = None
     ano: Optional[str] = None
